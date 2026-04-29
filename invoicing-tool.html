@@ -598,7 +598,7 @@
           <option value="specific">Let me pick specific cycles</option>
         </select>
       </div>
-      <div id="sd-specific-cycles" style="display:none; margin-top:10px; max-height:160px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:10px;" id="sd-cycle-list"></div>
+      <div id="sd-specific-cycles" style="display:none; margin-top:10px; max-height:160px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:10px;"></div>
     </div>
     <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('startdate-modal')">Cancel</button><button class="btn btn-primary" onclick="confirmAssign()">Assign</button></div>
   </div>
@@ -902,7 +902,7 @@ async function removePendingInvoice(invId, consultantId, cycleId) {
 //  MARK AS INVOICED
 // ============================================================
 function openInvoiceModal(invId) {
-  const inv = [..._pendingInvoices, ...(window._allPending||[])].find(i => i.id === invId) || { id: invId };
+  const inv = [..._pendingInvoices, ..._allPendingInvoices].find(i => i.id === invId) || { id: invId };
   document.getElementById('inv-pending-id').value = invId;
   document.getElementById('inv-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('inv-number').value = '';
@@ -1320,12 +1320,12 @@ async function bulkAssign() {
       const rate = document.getElementById(`rate-${cId}`)?.value || null;
       const sdate = document.getElementById(`sdate-${cId}`)?.value || null;
       const edate = document.getElementById(`edate-${cId}`)?.value || null;
-      if (existingIds.includes(cId)) toUpdate.push({ consultant_id:cId, billing_rate:rate, start_date:sdate, end_date:edate });
+      if (existingIds.includes(cId)) toUpdate.push({ consultant_id:cId, billing_cycle_id:cycleId, billing_rate:rate, start_date:sdate, end_date:edate });
       else toInsert.push({ consultant_id:cId, billing_cycle_id:cycleId, billing_rate:rate, start_date:sdate, end_date:edate });
       await sb.from('consultant_client_rates').upsert({ consultant_id:cId, client_id:clientId, billing_rate:rate }, { onConflict:'consultant_id,client_id' });
     }
     if (toInsert.length) await sb.from('consultant_billing_cycles').insert(toInsert);
-    for (const u of toUpdate) await sb.from('consultant_billing_cycles').update({ billing_rate:u.billing_rate, start_date:u.start_date, end_date:u.end_date }).eq('consultant_id',u.consultant_id).eq('billing_cycle_id',cycleId);
+    for (const u of toUpdate) await sb.from('consultant_billing_cycles').update({ billing_rate:u.billing_rate, start_date:u.start_date, end_date:u.end_date }).eq('consultant_id',u.consultant_id).eq('billing_cycle_id',u.billing_cycle_id);
   }
 
   toast(`${checked.length} consultant(s) assigned to ${cycleIds.length} cycle(s)`);
