@@ -196,6 +196,11 @@
         Pending Invoices
         <span id="pending-badge" style="margin-left:auto; background:#dc2626; color:white; border-radius:999px; font-size:10px; padding:1px 7px; display:none;">0</span>
       </div>
+      <div class="nav-link" onclick="showSection('upcoming')">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        Upcoming Cycles
+        <span id="upcoming-badge" style="margin-left:auto; background:#1a56db; color:white; border-radius:999px; font-size:10px; padding:1px 7px; display:none;">0</span>
+      </div>
       <div style="height:1px; background:#1e293b; margin:10px 0;"></div>
       <div style="font-size:10px; color:#475569; padding:6px 20px; letter-spacing:0.08em; font-weight:600; text-transform:uppercase;">Manage</div>
       <div class="nav-link" onclick="showSection('consultants')">
@@ -237,7 +242,7 @@
 
       <!-- DASHBOARD -->
       <div id="section-dashboard" class="section active">
-        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px;">
+        <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:16px; margin-bottom:24px;">
           <div class="stat-card">
             <div class="stat-value" id="stat-consultants">—</div>
             <div class="stat-label">Total Consultants</div>
@@ -253,6 +258,10 @@
           <div class="stat-card" style="border-left:3px solid #ef4444;">
             <div class="stat-value" style="color:#dc2626;" id="stat-pending">—</div>
             <div class="stat-label">Pending Invoices</div>
+          </div>
+          <div class="stat-card" style="border-left:3px solid #1a56db;">
+            <div class="stat-value" style="color:#1a56db;" id="stat-upcoming">—</div>
+            <div class="stat-label">Active / Upcoming Cycles</div>
           </div>
         </div>
         <div class="card">
@@ -278,6 +287,30 @@
         <div class="card">
           <div class="card-header"><span style="font-weight:600;">Pending Invoices</span></div>
           <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Consultant</th><th>Client</th><th>Cycle</th><th>Period</th><th>Billing Rate</th><th>Actions</th></tr></thead><tbody id="pending-body"><tr><td colspan="6" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- UPCOMING BILLING CYCLES -->
+      <div id="section-upcoming" class="section">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-body">
+            <div class="filter-bar">
+              <div class="form-group"><label class="form-label">Client</label><select id="uf-client" class="form-control" onchange="loadUpcoming()"><option value="">All Clients</option></select></div>
+              <div class="form-group"><label class="form-label">Consultant</label><select id="uf-consultant" class="form-control" onchange="loadUpcoming()"><option value="">All Consultants</option></select></div>
+              <div class="form-group"><label class="form-label">Status</label>
+                <select id="uf-status" class="form-control" onchange="loadUpcoming()">
+                  <option value="">Active &amp; Upcoming</option>
+                  <option value="active">Active Only</option>
+                  <option value="upcoming">Upcoming Only</option>
+                </select>
+              </div>
+              <div class="form-group"><label class="form-label">&nbsp;</label><button class="btn btn-secondary" onclick="clearUpcomingFilters()">Clear</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span style="font-weight:600;">Upcoming &amp; Active Billing Cycles</span></div>
+          <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Consultant</th><th>Client</th><th>Cycle / Label</th><th>Period</th><th>Billing Rate</th><th>Status</th></tr></thead><tbody id="upcoming-body"><tr><td colspan="6" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
         </div>
       </div>
 
@@ -342,13 +375,9 @@
                 <select id="asgn-client" class="form-control" onchange="onAssignClientChange()"><option value="">&#8212; Select Client &#8212;</option></select>
               </div>
               <div class="form-group">
-                <label class="form-label">Cycle Status Filter</label>
-                <select id="asgn-cycle-status" class="form-control" onchange="onAssignClientChange()" style="font-size:12px;">
-                  <option value="">All Cycles</option>
-                  <option value="active">Active</option>
-                  <option value="upcoming">Upcoming</option>
-                  <option value="ended">Ended</option>
-                </select>
+                <label class="form-label">Assign From Date</label>
+                <input type="date" id="asgn-from-date" class="form-control" style="font-size:12px;" onchange="onAssignFromDateChange()" placeholder="Select start date">
+                <p style="font-size:10px; color:var(--text-3); margin:4px 0 0;">Auto-selects all active &amp; future cycles from this date</p>
               </div>
               <div class="form-group" style="margin-bottom:0;">
                 <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
@@ -643,13 +672,14 @@ function showSection(id) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
   document.getElementById(`section-${id}`).classList.add('active');
-  const titles = { dashboard:'Dashboard', pending:'Pending Invoices', consultants:'Consultants', clients:'Clients', 'billing-cycles':'Billing Cycles', assignments:'Assignments', settings:'Settings' };
+  const titles = { dashboard:'Dashboard', pending:'Pending Invoices', upcoming:'Upcoming Cycles', consultants:'Consultants', clients:'Clients', 'billing-cycles':'Billing Cycles', assignments:'Assignments', settings:'Settings' };
   document.getElementById('page-title').textContent = titles[id] || id;
   document.querySelectorAll('.nav-link').forEach(n => {
     if (n.getAttribute('onclick') === `showSection('${id}')`) n.classList.add('active');
   });
   // lazy-load sections
   if (id === 'pending') loadPending();
+  if (id === 'upcoming') loadUpcoming();
   if (id === 'consultants') loadConsultants();
   if (id === 'clients') loadClients();
   if (id === 'billing-cycles') loadBillingCycles();
@@ -660,7 +690,7 @@ function showSection(id) {
 // ============================================================
 //  DATA CACHE
 // ============================================================
-let _consultants = [], _clients = [], _cycles = [], _assignments = [], _pendingInvoices = [];
+let _consultants = [], _clients = [], _cycles = [], _assignments = [], _pendingInvoices = [], _allPendingInvoices = [];
 
 async function loadAllData() {
   await Promise.all([fetchConsultants(), fetchClients(), fetchCycles(), fetchAssignments()]);
@@ -687,7 +717,14 @@ async function fetchAssignments() {
 }
 async function fetchPendingInvoices() {
   const { data } = await sb.from('invoices').select('*').eq('status','pending');
-  _pendingInvoices = data || [];
+  const today = new Date().toISOString().split('T')[0];
+  // Only count invoices for ended cycles as truly "pending"
+  _pendingInvoices = (data || []).filter(r => {
+    const cyc = _cycles.find(c => c.id === r.billing_cycle_id);
+    return cyc && cyc.end_date < today;
+  });
+  // Store all pending (including upcoming) separately for the upcoming section
+  _allPendingInvoices = data || [];
 }
 
 // ============================================================
@@ -720,10 +757,16 @@ function loadDashboard() {
   document.getElementById('stat-clients').textContent = _clients.length;
   document.getElementById('stat-cycles').textContent = _cycles.length;
   document.getElementById('stat-pending').textContent = _pendingInvoices.length;
+  const _upcomingCount = _assignments.filter(a => { const c=_cycles.find(cy=>cy.id===a.billing_cycle_id); return c && c.end_date >= new Date().toISOString().split('T')[0]; }).length;
+  const _upcomingEl = document.getElementById('stat-upcoming'); if (_upcomingEl) _upcomingEl.textContent = _upcomingCount;
 
   const badge = document.getElementById('pending-badge');
   if (_pendingInvoices.length > 0) { badge.textContent = _pendingInvoices.length; badge.style.display = 'inline'; }
   else { badge.style.display = 'none'; }
+  const today2 = new Date().toISOString().split('T')[0];
+  const upcomingCount = _assignments.filter(a => { const c=_cycles.find(cy=>cy.id===a.billing_cycle_id); return c && c.end_date >= today2; }).length;
+  const ubadge = document.getElementById('upcoming-badge');
+  if (ubadge) { if (upcomingCount > 0) { ubadge.textContent = upcomingCount; ubadge.style.display = 'inline'; } else { ubadge.style.display = 'none'; } }
 
   const tbody = document.getElementById('dash-pending-body');
   if (_pendingInvoices.length === 0) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--text-3); text-align:center; padding:30px;">No pending invoices</td></tr>`; return; }
@@ -747,7 +790,12 @@ function loadDashboard() {
 // ============================================================
 async function loadPending() {
   const { data } = await sb.from('invoices').select('*').eq('status','pending');
-  let rows = data || [];
+  const today = new Date().toISOString().split('T')[0];
+  // Only show invoices for cycles that have ended
+  let rows = (data || []).filter(r => {
+    const cyc = _cycles.find(c => c.id === r.billing_cycle_id);
+    return cyc && cyc.end_date < today;
+  });
 
   const clientFilter = document.getElementById('f-client').value;
   const consultantFilter = document.getElementById('f-consultant').value;
@@ -788,6 +836,55 @@ function clearFilters() {
   document.getElementById('f-from').value = '';
   document.getElementById('f-to').value = '';
   loadPending();
+}
+
+async function loadUpcoming() {
+  const today = new Date().toISOString().split('T')[0];
+  const clientFilter = document.getElementById('uf-client').value;
+  const consultantFilter = document.getElementById('uf-consultant').value;
+  const statusFilter = document.getElementById('uf-status').value;
+
+  // Build rows from assignments where the cycle is active or upcoming
+  let rows = [];
+  for (const asgn of _assignments) {
+    const cyc = _cycles.find(c => c.id === asgn.billing_cycle_id);
+    if (!cyc) continue;
+    const s = cyc.end_date < today ? 'ended' : (cyc.start_date <= today ? 'active' : 'upcoming');
+    if (s === 'ended') continue; // ended = pending invoices section
+    rows.push({ asgn, cyc, status: s });
+  }
+
+  if (clientFilter) rows = rows.filter(r => r.cyc.client_id === clientFilter);
+  if (consultantFilter) rows = rows.filter(r => r.asgn.consultant_id === consultantFilter);
+  if (statusFilter) rows = rows.filter(r => r.status === statusFilter);
+
+  const tbody = document.getElementById('upcoming-body');
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--text-3); text-align:center; padding:30px;">No active or upcoming billing cycles with assignments</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(({ asgn, cyc, status }) => {
+    const cons = _consultants.find(c => c.id === asgn.consultant_id);
+    const cli = _clients.find(c => c.id === cyc.client_id);
+    const statusBadge = status === 'active'
+      ? `<span class="badge badge-active">Active</span>`
+      : `<span class="badge" style="background:var(--surface-3);color:var(--text-2);">Upcoming</span>`;
+    return `<tr>
+      <td><strong>${cons?.name || '—'}</strong></td>
+      <td>${cli?.name || '—'}</td>
+      <td>${cyc.label || ''}</td>
+      <td class="mono" style="font-size:12px;">${cyc.start_date} → ${cyc.end_date}</td>
+      <td class="mono">${asgn.billing_rate ? '$'+asgn.billing_rate : '—'}</td>
+      <td>${statusBadge}</td>
+    </tr>`;
+  }).join('');
+}
+
+function clearUpcomingFilters() {
+  document.getElementById('uf-client').value = '';
+  document.getElementById('uf-consultant').value = '';
+  document.getElementById('uf-status').value = '';
+  loadUpcoming();
 }
 
 async function removePendingInvoice(invId, consultantId, cycleId) {
@@ -1094,35 +1191,53 @@ function getSelectedCycleIds() {
 }
 
 function selectAllCycles(checked) {
-  document.querySelectorAll('.cycle-chk').forEach(c => c.checked = checked);
+  document.querySelectorAll('.cycle-chk').forEach(c => {
+    // When selecting all, skip ended cycles
+    if (checked && c.dataset.status === 'ended') return;
+    c.checked = checked;
+  });
 }
 
 function onAssignClientChange() {
   const clientId = document.getElementById('asgn-client').value;
-  const statusFilter = (document.getElementById('asgn-cycle-status')||{}).value || '';
   const list = document.getElementById('asgn-cycle-list');
+  // Reset from-date when client changes
+  const fromDateEl = document.getElementById('asgn-from-date');
+  if (fromDateEl) fromDateEl.value = '';
   if (!clientId) {
     list.innerHTML = '<div style="padding:12px; color:var(--text-3); font-size:12px; text-align:center;">Select a client first</div>';
     document.getElementById('asgn-card').style.display = 'none';
     document.getElementById('asgn-empty').style.display = 'block';
     return;
   }
+  renderCycleList(clientId, '');
+}
+
+function onAssignFromDateChange() {
+  const clientId = document.getElementById('asgn-client').value;
+  if (!clientId) return;
+  const fromDate = document.getElementById('asgn-from-date').value;
+  renderCycleList(clientId, fromDate);
+}
+
+function renderCycleList(clientId, fromDate) {
+  const list = document.getElementById('asgn-cycle-list');
   const today = new Date().toISOString().split('T')[0];
-  let clientCycles = _cycles.filter(c=>c.client_id===clientId);
-  if (statusFilter) clientCycles = clientCycles.filter(c => {
-    const s = c.end_date < today ? 'ended' : (c.start_date <= today ? 'active' : 'upcoming');
-    return s === statusFilter;
-  });
+  const clientCycles = _cycles.filter(c => c.client_id === clientId);
   if (clientCycles.length === 0) {
-    list.innerHTML = '<div style="padding:12px; color:var(--text-3); font-size:12px; text-align:center;">No cycles match the filter</div>';
+    list.innerHTML = '<div style="padding:12px; color:var(--text-3); font-size:12px; text-align:center;">No billing cycles for this client</div>';
     return;
   }
   list.innerHTML = clientCycles.map(c => {
     const status = c.end_date < today ? 'ended' : (c.start_date <= today ? 'active' : 'upcoming');
-    const statusColor = status==='ended' ? 'var(--warning)' : status==='active' ? 'var(--success)' : 'var(--text-3)';
-    const statusLabel = status.charAt(0).toUpperCase()+status.slice(1);
-    return `<label style="display:flex; align-items:center; gap:8px; padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border); font-size:12px;" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background=''">
-      <input type="checkbox" class="cycle-chk" data-id="${c.id}" style="accent-color:var(--brand); width:14px; height:14px; flex-shrink:0;">
+    const statusColor = status === 'ended' ? 'var(--warning)' : status === 'active' ? 'var(--success)' : 'var(--brand)';
+    const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+    // Auto-check: not ended AND start_date >= fromDate (if fromDate set)
+    const autoCheck = status !== 'ended' && (fromDate ? c.start_date >= fromDate : false);
+    // Dim ended cycles visually
+    const opacity = status === 'ended' ? 'opacity:0.5;' : '';
+    return `<label style="display:flex; align-items:center; gap:8px; padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border); font-size:12px; ${opacity}" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background=''">
+      <input type="checkbox" class="cycle-chk" data-id="${c.id}" data-status="${status}" ${autoCheck ? 'checked' : ''} style="accent-color:var(--brand); width:14px; height:14px; flex-shrink:0;">
       <span style="flex:1;">
         <span class="mono" style="font-size:11px; color:var(--text-2);">${c.start_date} → ${c.end_date}</span>
         <span style="display:flex; gap:4px; align-items:center; margin-top:1px;">
@@ -1368,7 +1483,7 @@ async function checkPendingOnLogin() {
 //  FILTER DROPDOWNS POPULATION
 // ============================================================
 function populateFilterDropdowns() {
-  const clientSels = ['f-client','bc-client-filter'];
+  const clientSels = ['f-client','bc-client-filter','uf-client'];
   clientSels.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -1376,8 +1491,7 @@ function populateFilterDropdowns() {
     el.innerHTML = '<option value="">All Clients</option>' + _clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
     el.value = cur;
   });
-  const consSel = document.getElementById('f-consultant');
-  if (consSel) { const cur=consSel.value; consSel.innerHTML='<option value="">All Consultants</option>'+_consultants.map(c=>`<option value="${c.id}">${c.name}</option>`).join(''); consSel.value=cur; }
+  ['f-consultant','uf-consultant'].forEach(id => { const el=document.getElementById(id); if(!el) return; const cur=el.value; el.innerHTML='<option value="">All Consultants</option>'+_consultants.map(c=>`<option value="${c.id}">${c.name}</option>`).join(''); el.value=cur; });
   const cycSel = document.getElementById('f-cycle');
   if (cycSel) { const cur=cycSel.value; cycSel.innerHTML='<option value="">All Cycles</option>'+_cycles.map(c=>`<option value="${c.id}">${c.start_date} → ${c.end_date}${c.label?' ('+c.label+')':''}</option>`).join(''); cycSel.value=cur; }
 }
