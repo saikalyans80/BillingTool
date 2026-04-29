@@ -321,6 +321,7 @@
             <span style="font-weight:600;">Billing Cycles</span>
             <div style="display:flex;gap:8px;">
               <button class="btn btn-danger btn-sm" onclick="unassignEndedCycles()">Unassign Ended Cycles</button>
+              <button class="btn btn-secondary btn-sm" onclick="openBulkCycleModal()">+ Bulk Add</button>
               <button class="btn btn-primary btn-sm" onclick="openCycleModal()">+ Add Cycle(s)</button>
             </div>
           </div>
@@ -453,6 +454,38 @@
       <button class="btn btn-secondary" onclick="closeModal('bulk-consultant-modal')">Cancel</button>
       <button class="btn btn-secondary" onclick="previewBulkConsultants()">Preview</button>
       <button class="btn btn-primary" onclick="saveBulkConsultants()">Add All</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Cycle Modal -->
+<div class="modal-overlay" id="bulk-cycle-modal">
+  <div class="modal" style="max-width:580px;">
+    <div class="modal-header">
+      <h3 style="font-size:15px; font-weight:600; margin:0;">Bulk Add Billing Cycles</h3>
+      <button class="modal-close" onclick="closeModal('bulk-cycle-modal')">&#215;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Client *</label>
+        <select id="bulk-cyc-client" class="form-control"><option value="">&#8212; Select Client &#8212;</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Label / Notes <span style="font-weight:400;color:var(--text-3);">(optional, applied to all)</span></label>
+        <input type="text" id="bulk-cyc-label" class="form-control" placeholder="e.g. Q1 2025">
+      </div>
+      <div class="form-group" style="margin-bottom:6px;">
+        <label class="form-label">Cycles (one per line)</label>
+        <p style="font-size:11px; color:var(--text-2); margin:0 0 8px;">Format: <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px;">YYYY-MM-DD, YYYY-MM-DD</code> &nbsp; (start date, end date)</p>
+        <textarea id="bulk-cyc-input" class="form-control" rows="10"
+          placeholder="2025-01-01, 2025-01-31&#10;2025-02-01, 2025-02-28&#10;2025-03-01, 2025-03-31"></textarea>
+      </div>
+      <div id="bulk-cyc-preview" style="font-size:12px; color:var(--text-2); margin-top:6px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('bulk-cycle-modal')">Cancel</button>
+      <button class="btn btn-secondary" onclick="previewBulkCycles()">Preview</button>
+      <button class="btn btn-primary" onclick="saveBulkCycles()">Add All</button>
     </div>
   </div>
 </div>
@@ -1237,6 +1270,69 @@ async function saveBulkConsultants() {
   toast(`${parsed.length} consultant(s) added`);
   await loadAllData();
   loadConsultants();
+}
+
+// ============================================================
+//  BULK ADD BILLING CYCLES
+// ============================================================
+function openBulkCycleModal() {
+  document.getElementById('bulk-cyc-client').innerHTML =
+    '<option value="">— Select Client —</option>' +
+    _clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  document.getElementById('bulk-cyc-input').value = '';
+  document.getElementById('bulk-cyc-label').value = '';
+  document.getElementById('bulk-cyc-preview').innerHTML = '';
+  openModal('bulk-cycle-modal');
+}
+
+function parseBulkCycles() {
+  const lines = document.getElementById('bulk-cyc-input').value
+    .split('\n').map(l=>l.trim()).filter(Boolean);
+  const valid = [], invalid = [];
+  lines.forEach((line, i) => {
+    // accept comma, tab, or " - " as separator
+    const parts = line.split(/,|	| - /).map(p=>p.trim());
+    const start = parts[0], end = parts[1];
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+    if (dateRe.test(start) && dateRe.test(end) && start <= end) {
+      valid.push({ start_date: start, end_date: end });
+    } else {
+      invalid.push({ line: line, num: i+1 });
+    }
+  });
+  return { valid, invalid };
+}
+
+function previewBulkCycles() {
+  const { valid, invalid } = parseBulkCycles();
+  let html = '';
+  if (valid.length) {
+    html += `<div style="color:var(--success); font-weight:600; margin-bottom:6px;">✓ ${valid.length} cycle(s) ready to add:</div>`;
+    html += valid.map((c,i)=>`<div style="padding:3px 0; border-bottom:1px solid var(--border);">${i+1}. <span class="mono">${c.start_date} → ${c.end_date}</span></div>`).join('');
+  }
+  if (invalid.length) {
+    html += `<div style="color:var(--danger); font-weight:600; margin:8px 0 4px;">⚠ ${invalid.length} invalid line(s) (will be skipped):</div>`;
+    html += invalid.map(e=>`<div style="padding:2px 0; color:var(--danger);">Line ${e.num}: ${e.line}</div>`).join('');
+    html += `<div style="font-size:11px; color:var(--text-3); margin-top:4px;">Expected: YYYY-MM-DD, YYYY-MM-DD</div>`;
+  }
+  if (!valid.length && !invalid.length) html = '<span style="color:var(--text-3);">Nothing to preview yet.</span>';
+  document.getElementById('bulk-cyc-preview').innerHTML = html;
+}
+
+async function saveBulkCycles() {
+  const clientId = document.getElementById('bulk-cyc-client').value;
+  if (!clientId) { toast('Select a client first', 'error'); return; }
+  const label = document.getElementById('bulk-cyc-label').value.trim();
+  const { valid, invalid } = parseBulkCycles();
+  if (valid.length === 0) { toast('No valid cycle lines found', 'error'); return; }
+  if (invalid.length > 0 && !confirm(`${invalid.length} invalid line(s) will be skipped. Add the ${valid.length} valid cycle(s)?`)) return;
+  const toInsert = valid.map(c=>({ client_id: clientId, cycle_type: 'custom', start_date: c.start_date, end_date: c.end_date, label: label||null }));
+  const { error } = await sb.from('billing_cycles').insert(toInsert);
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  closeModal('bulk-cycle-modal');
+  toast(`${valid.length} billing cycle(s) added`);
+  await loadAllData();
+  loadBillingCycles();
 }
 
 // ============================================================
