@@ -267,6 +267,7 @@
           <div class="card-body">
             <div class="filter-bar">
               <div class="form-group"><label class="form-label">Client</label><select id="f-client" class="form-control" onchange="loadPending()"><option value="">All Clients</option></select></div>
+              <div class="form-group"><label class="form-label">Consultant</label><select id="f-consultant" class="form-control" onchange="loadPending()"><option value="">All Consultants</option></select></div>
               <div class="form-group"><label class="form-label">Billing Cycle</label><select id="f-cycle" class="form-control" onchange="loadPending()"><option value="">All Cycles</option></select></div>
               <div class="form-group"><label class="form-label">From Date</label><input type="date" id="f-from" class="form-control" onchange="loadPending()"></div>
               <div class="form-group"><label class="form-label">To Date</label><input type="date" id="f-to" class="form-control" onchange="loadPending()"></div>
@@ -285,7 +286,10 @@
         <div class="card">
           <div class="card-header">
             <span style="font-weight:600;">Consultants</span>
-            <button class="btn btn-primary btn-sm" onclick="openConsultantModal()">+ Add Consultant</button>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary btn-sm" onclick="openBulkConsultantModal()">+ Bulk Add</button>
+              <button class="btn btn-primary btn-sm" onclick="openConsultantModal()">+ Add Consultant</button>
+            </div>
           </div>
           <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Assigned Clients</th><th>Actions</th></tr></thead><tbody id="consultants-body"><tr><td colspan="5" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
         </div>
@@ -315,7 +319,10 @@
         <div class="card">
           <div class="card-header">
             <span style="font-weight:600;">Billing Cycles</span>
-            <button class="btn btn-primary btn-sm" onclick="openCycleModal()">+ Add Cycle(s)</button>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-danger btn-sm" onclick="unassignEndedCycles()">Unassign Ended Cycles</button>
+              <button class="btn btn-primary btn-sm" onclick="openCycleModal()">+ Add Cycle(s)</button>
+            </div>
           </div>
           <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Client</th><th>Type</th><th>Period</th><th>Status</th><th>Assigned Consultants</th><th>Actions</th></tr></thead><tbody id="cycles-body"><tr><td colspan="6" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
         </div>
@@ -323,25 +330,63 @@
 
       <!-- ASSIGNMENTS -->
       <div id="section-assignments" class="section">
-        <div class="card" style="margin-bottom:16px;">
-          <div class="card-body">
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-              <div class="form-group" style="margin:0;"><label class="form-label">Select Client</label><select id="asgn-client" class="form-control" onchange="onAssignClientChange()"><option value="">— Select Client —</option></select></div>
-              <div class="form-group" style="margin:0;"><label class="form-label">Select Billing Cycle</label><select id="asgn-cycle" class="form-control" onchange="loadAssignments()"><option value="">— Select Cycle —</option></select></div>
+        <div style="display:grid; grid-template-columns:280px 1fr; gap:16px; align-items:start;">
+
+          <!-- Left: Client + Cycle picker -->
+          <div class="card" style="position:sticky; top:74px;">
+            <div class="card-header"><span style="font-weight:600; font-size:13px;">Filter</span></div>
+            <div class="card-body" style="padding:16px;">
+              <div class="form-group">
+                <label class="form-label">Client</label>
+                <select id="asgn-client" class="form-control" onchange="onAssignClientChange()"><option value="">&#8212; Select Client &#8212;</option></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Cycle Status Filter</label>
+                <select id="asgn-cycle-status" class="form-control" onchange="onAssignClientChange()" style="font-size:12px;">
+                  <option value="">All Cycles</option>
+                  <option value="active">Active</option>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="ended">Ended</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+                  Billing Cycles
+                  <span style="display:flex; gap:6px;">
+                    <button class="btn btn-xs btn-secondary" onclick="selectAllCycles(true)">All</button>
+                    <button class="btn btn-xs btn-secondary" onclick="selectAllCycles(false)">None</button>
+                  </span>
+                </label>
+                <div id="asgn-cycle-list" style="border:1px solid var(--border); border-radius:6px; max-height:220px; overflow-y:auto; background:var(--surface-2);">
+                  <div style="padding:12px; color:var(--text-3); font-size:12px; text-align:center;">Select a client first</div>
+                </div>
+              </div>
+            </div>
+            <div style="padding:12px 16px; border-top:1px solid var(--border);">
+              <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="loadAssignments()">Load Assignments</button>
             </div>
           </div>
-        </div>
-        <div class="card" id="asgn-card" style="display:none;">
-          <div class="card-header">
-            <span style="font-weight:600;">Consultant Assignments</span>
-            <div style="display:flex; gap:8px;">
-              <button class="btn btn-secondary btn-sm" onclick="selectAllConsultants(true)">Select All</button>
-              <button class="btn btn-secondary btn-sm" onclick="selectAllConsultants(false)">Deselect All</button>
-              <button class="btn btn-primary btn-sm" onclick="bulkAssign()">Assign Selected</button>
-              <button class="btn btn-danger btn-sm" onclick="bulkUnassign()">Unassign Selected</button>
+
+          <!-- Right: Consultant table -->
+          <div>
+            <div class="card" id="asgn-card" style="display:none;">
+              <div class="card-header">
+                <div>
+                  <span style="font-weight:600;">Consultant Assignments</span>
+                  <div id="asgn-cycle-summary" style="font-size:11px; color:var(--text-3); margin-top:2px;"></div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                  <button class="btn btn-secondary btn-sm" onclick="selectAllConsultants(true)">Select All</button>
+                  <button class="btn btn-secondary btn-sm" onclick="selectAllConsultants(false)">Deselect All</button>
+                  <button class="btn btn-primary btn-sm" onclick="bulkAssign()">Assign Selected</button>
+                  <button class="btn btn-danger btn-sm" onclick="bulkUnassign()">Unassign Selected</button>
+                </div>
+              </div>
+              <div class="tbl-wrap"><table class="tbl"><thead><tr><th><input type="checkbox" id="select-all-chk" onchange="selectAllConsultants(this.checked)"></th><th>Consultant</th><th>Billing Rate (for this client)</th><th>Starts At</th><th>Ends At</th><th>Status across selected cycles</th></tr></thead><tbody id="asgn-body"></tbody></table></div>
             </div>
+            <div id="asgn-empty" style="color:var(--text-3); font-size:13px; text-align:center; padding:60px 0;">Select a client and at least one billing cycle, then click <strong>Load Assignments</strong>.</div>
           </div>
-          <div class="tbl-wrap"><table class="tbl"><thead><tr><th><input type="checkbox" id="select-all-chk" onchange="selectAllConsultants(this.checked)"></th><th>Consultant</th><th>Billing Rate (for this client)</th><th>Start Date</th><th>Status</th></tr></thead><tbody id="asgn-body"></tbody></table></div>
+
         </div>
       </div>
 
@@ -389,6 +434,26 @@
       <div class="form-group"><label class="form-label">Notes</label><textarea id="cons-notes" class="form-control" rows="2" placeholder="Any notes…"></textarea></div>
     </div>
     <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('consultant-modal')">Cancel</button><button class="btn btn-primary" onclick="saveConsultant()">Save</button></div>
+  </div>
+</div>
+
+<!-- Bulk Consultant Modal -->
+<div class="modal-overlay" id="bulk-consultant-modal">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-header"><h3 style="font-size:15px; font-weight:600; margin:0;">Bulk Add Consultants</h3><button class="modal-close" onclick="closeModal('bulk-consultant-modal')">×</button></div>
+    <div class="modal-body">
+      <p style="font-size:12px; color:var(--text-2); margin-bottom:12px;">Paste one consultant per line. Format: <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px;">Name, Email, Phone</code> (email and phone optional)</p>
+      <div class="form-group">
+        <label class="form-label">Consultants (one per line)</label>
+        <textarea id="bulk-cons-input" class="form-control" rows="10" placeholder="John Smith, john@example.com, +1 555 0001&#10;Jane Doe, jane@example.com&#10;Bob Johnson"></textarea>
+      </div>
+      <div id="bulk-cons-preview" style="margin-top:8px; font-size:12px; color:var(--text-2);"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('bulk-consultant-modal')">Cancel</button>
+      <button class="btn btn-secondary" onclick="previewBulkConsultants()">Preview</button>
+      <button class="btn btn-primary" onclick="saveBulkConsultants()">Add All</button>
+    </div>
   </div>
 </div>
 
@@ -547,8 +612,9 @@ function showSection(id) {
   document.getElementById(`section-${id}`).classList.add('active');
   const titles = { dashboard:'Dashboard', pending:'Pending Invoices', consultants:'Consultants', clients:'Clients', 'billing-cycles':'Billing Cycles', assignments:'Assignments', settings:'Settings' };
   document.getElementById('page-title').textContent = titles[id] || id;
-  const navMap = { dashboard:0, pending:1, consultants:3, clients:4, 'billing-cycles':5, assignments:6, settings:8 };
-  document.querySelectorAll('.nav-link')[navMap[id]]?.classList.add('active');
+  document.querySelectorAll('.nav-link').forEach(n => {
+    if (n.getAttribute('onclick') === `showSection('${id}')`) n.classList.add('active');
+  });
   // lazy-load sections
   if (id === 'pending') loadPending();
   if (id === 'consultants') loadConsultants();
@@ -651,11 +717,13 @@ async function loadPending() {
   let rows = data || [];
 
   const clientFilter = document.getElementById('f-client').value;
+  const consultantFilter = document.getElementById('f-consultant').value;
   const cycleFilter = document.getElementById('f-cycle').value;
   const fromFilter = document.getElementById('f-from').value;
   const toFilter = document.getElementById('f-to').value;
 
   if (clientFilter) rows = rows.filter(r => r.client_id === clientFilter);
+  if (consultantFilter) rows = rows.filter(r => r.consultant_id === consultantFilter);
   if (cycleFilter) rows = rows.filter(r => r.billing_cycle_id === cycleFilter);
   if (fromFilter) rows = rows.filter(r => { const cyc = _cycles.find(c=>c.id===r.billing_cycle_id); return cyc && cyc.start_date >= fromFilter; });
   if (toFilter) rows = rows.filter(r => { const cyc = _cycles.find(c=>c.id===r.billing_cycle_id); return cyc && cyc.end_date <= toFilter; });
@@ -682,6 +750,7 @@ async function loadPending() {
 
 function clearFilters() {
   document.getElementById('f-client').value = '';
+  document.getElementById('f-consultant').value = '';
   document.getElementById('f-cycle').value = '';
   document.getElementById('f-from').value = '';
   document.getElementById('f-to').value = '';
@@ -881,6 +950,21 @@ async function loadBillingCycles() {
   }).join('');
 }
 
+async function unassignEndedCycles() {
+  const today = new Date().toISOString().split('T')[0];
+  const endedCycles = _cycles.filter(c => c.end_date < today);
+  if (endedCycles.length === 0) { toast('No ended billing cycles found', 'error'); return; }
+  const endedIds = endedCycles.map(c => c.id);
+  const affectedAsgns = _assignments.filter(a => endedIds.includes(a.billing_cycle_id));
+  if (affectedAsgns.length === 0) { toast('No consultant assignments to remove for ended cycles'); return; }
+  if (!confirm(`This will unassign ${affectedAsgns.length} consultant assignment(s) from ${endedCycles.length} ended cycle(s). Pending invoices for these will also be removed. Continue?`)) return;
+  await sb.from('invoices').delete().in('billing_cycle_id', endedIds).eq('status','pending');
+  await sb.from('consultant_billing_cycles').delete().in('billing_cycle_id', endedIds);
+  toast(`Unassigned ${affectedAsgns.length} assignment(s) from ${endedCycles.length} ended cycle(s)`);
+  await loadAllData();
+  loadBillingCycles();
+}
+
 function cycleLabel(cyc) { if(!cyc) return '—'; return `${cyc.start_date} → ${cyc.end_date}`; }
 
 function onCycleTypeChange() {
@@ -966,42 +1050,103 @@ function openCycleModal() {
 // ============================================================
 async function loadAssignmentDropdowns() {
   const sel = document.getElementById('asgn-client');
-  sel.innerHTML = '<option value="">— Select Client —</option>' + _clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-  document.getElementById('asgn-cycle').innerHTML = '<option value="">— Select Cycle —</option>';
+  sel.innerHTML = '<option value="">\u2014 Select Client \u2014</option>' + _clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  document.getElementById('asgn-cycle-list').innerHTML = '<div style="padding:12px; color:var(--text-3); font-size:12px; text-align:center;">Select a client first</div>';
   document.getElementById('asgn-card').style.display = 'none';
+  document.getElementById('asgn-empty').style.display = 'block';
+}
+
+function getSelectedCycleIds() {
+  return [...document.querySelectorAll('.cycle-chk:checked')].map(c => c.dataset.id);
+}
+
+function selectAllCycles(checked) {
+  document.querySelectorAll('.cycle-chk').forEach(c => c.checked = checked);
 }
 
 function onAssignClientChange() {
   const clientId = document.getElementById('asgn-client').value;
-  const cyc = document.getElementById('asgn-cycle');
-  cyc.innerHTML = '<option value="">— Select Cycle —</option>';
-  if (!clientId) { document.getElementById('asgn-card').style.display='none'; return; }
-  const clientCycles = _cycles.filter(c=>c.client_id===clientId);
-  clientCycles.forEach(c => { cyc.innerHTML += `<option value="${c.id}">${c.start_date} → ${c.end_date} ${c.label?'('+c.label+')':''}</option>`; });
+  const statusFilter = (document.getElementById('asgn-cycle-status')||{}).value || '';
+  const list = document.getElementById('asgn-cycle-list');
+  if (!clientId) {
+    list.innerHTML = '<div style="padding:12px; color:var(--text-3); font-size:12px; text-align:center;">Select a client first</div>';
+    document.getElementById('asgn-card').style.display = 'none';
+    document.getElementById('asgn-empty').style.display = 'block';
+    return;
+  }
+  const today = new Date().toISOString().split('T')[0];
+  let clientCycles = _cycles.filter(c=>c.client_id===clientId);
+  if (statusFilter) clientCycles = clientCycles.filter(c => {
+    const s = c.end_date < today ? 'ended' : (c.start_date <= today ? 'active' : 'upcoming');
+    return s === statusFilter;
+  });
+  if (clientCycles.length === 0) {
+    list.innerHTML = '<div style="padding:12px; color:var(--text-3); font-size:12px; text-align:center;">No cycles match the filter</div>';
+    return;
+  }
+  list.innerHTML = clientCycles.map(c => {
+    const status = c.end_date < today ? 'ended' : (c.start_date <= today ? 'active' : 'upcoming');
+    const statusColor = status==='ended' ? 'var(--warning)' : status==='active' ? 'var(--success)' : 'var(--text-3)';
+    const statusLabel = status.charAt(0).toUpperCase()+status.slice(1);
+    return `<label style="display:flex; align-items:center; gap:8px; padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border); font-size:12px;" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background=''">
+      <input type="checkbox" class="cycle-chk" data-id="${c.id}" style="accent-color:var(--brand); width:14px; height:14px; flex-shrink:0;">
+      <span style="flex:1;">
+        <span class="mono" style="font-size:11px; color:var(--text-2);">${c.start_date} → ${c.end_date}</span>
+        <span style="display:flex; gap:4px; align-items:center; margin-top:1px;">
+          ${c.label ? `<span style="color:var(--text-3); font-size:10px;">${c.label}</span>` : ''}
+          <span style="font-size:9px; font-weight:600; color:${statusColor}; text-transform:uppercase;">${statusLabel}</span>
+        </span>
+      </span>
+    </label>`;
+  }).join('');
 }
 
 async function loadAssignments() {
-  const cycleId = document.getElementById('asgn-cycle').value;
-  if (!cycleId) { document.getElementById('asgn-card').style.display='none'; return; }
+  const cycleIds = getSelectedCycleIds();
   const clientId = document.getElementById('asgn-client').value;
-  document.getElementById('asgn-card').style.display = 'block';
+  const empty = document.getElementById('asgn-empty');
+  const card = document.getElementById('asgn-card');
 
-  // Get existing assignments for this cycle
-  const { data: cycleAssignments } = await sb.from('consultant_billing_cycles').select('*').eq('billing_cycle_id',cycleId);
-  // Get client rates
-  const { data: clientRates } = await sb.from('consultant_client_rates').select('*').eq('client_id',clientId);
+  if (!clientId || cycleIds.length === 0) {
+    toast('Select a client and at least one billing cycle', 'error');
+    return;
+  }
+
+  card.style.display = 'block';
+  empty.style.display = 'none';
+
+  // Summary label
+  const selectedCycleObjs = _cycles.filter(c => cycleIds.includes(c.id));
+  document.getElementById('asgn-cycle-summary').textContent =
+    cycleIds.length === 1
+      ? `Cycle: ${selectedCycleObjs[0]?.start_date} \u2192 ${selectedCycleObjs[0]?.end_date}`
+      : `${cycleIds.length} billing cycles selected`;
+
+  // Fetch all assignments for selected cycles in one go
+  const { data: cycleAssignments } = await sb.from('consultant_billing_cycles').select('*').in('billing_cycle_id', cycleIds);
+  const { data: clientRates } = await sb.from('consultant_client_rates').select('*').eq('client_id', clientId);
 
   const tbody = document.getElementById('asgn-body');
   tbody.innerHTML = _consultants.map(c => {
-    const asgn = (cycleAssignments||[]).find(a=>a.consultant_id===c.id);
-    const rate = (clientRates||[]).find(r=>r.consultant_id===c.id);
-    const isAssigned = !!asgn;
+    // Find assignments for this consultant across selected cycles
+    const myAsgns = (cycleAssignments||[]).filter(a=>a.consultant_id===c.id);
+    const assignedCount = myAsgns.length;
+    const rate = myAsgns[0]?.billing_rate || (clientRates||[]).find(r=>r.consultant_id===c.id)?.billing_rate || '';
+    const sdate = myAsgns[0]?.start_date || '';
+
+    let statusHtml;
+    if (assignedCount === 0) statusHtml = '<span class="badge" style="background:var(--surface-3);color:var(--text-2);">Unassigned</span>';
+    else if (assignedCount === cycleIds.length) statusHtml = '<span class="badge badge-active">All ' + cycleIds.length + ' cycle' + (cycleIds.length>1?'s':'') + '</span>';
+    else statusHtml = '<span class="badge badge-pending">' + assignedCount + ' of ' + cycleIds.length + ' cycles</span>';
+
+    const edate = myAsgns[0]?.end_date || '';
     return `<tr id="asgn-row-${c.id}">
-      <td><input type="checkbox" class="asgn-chk" data-id="${c.id}" ${isAssigned?'checked':''}></td>
+      <td><input type="checkbox" class="asgn-chk" data-id="${c.id}" ${assignedCount>0?'checked':''}></td>
       <td><strong>${c.name}</strong><br><span style="font-size:11px;color:var(--text-3);">${c.email||''}</span></td>
-      <td><div style="display:flex;align-items:center;gap:6px;"><span style="color:var(--text-3);font-size:12px;">$</span><input type="number" id="rate-${c.id}" class="form-control" style="width:100px;" placeholder="0.00" step="0.01" value="${asgn?.billing_rate||rate?.billing_rate||''}"></div></td>
-      <td><input type="date" id="sdate-${c.id}" class="form-control" style="width:150px;" value="${asgn?.start_date||''}"></td>
-      <td>${isAssigned ? '<span class="badge badge-active">Assigned</span>' : '<span class="badge" style="background:var(--surface-3);color:var(--text-2);">Unassigned</span>'}</td>
+      <td><div style="display:flex;align-items:center;gap:6px;"><span style="color:var(--text-3);font-size:12px;">$</span><input type="number" id="rate-${c.id}" class="form-control" style="width:100px;" placeholder="0.00" step="0.01" value="${rate}"></div></td>
+      <td><input type="date" id="sdate-${c.id}" class="form-control" style="width:140px;" value="${sdate}"></td>
+      <td><input type="date" id="edate-${c.id}" class="form-control" style="width:140px;" value="${edate}"></td>
+      <td>${statusHtml}</td>
     </tr>`;
   }).join('');
 }
@@ -1012,47 +1157,86 @@ function selectAllConsultants(checked) {
 }
 
 async function bulkAssign() {
-  const cycleId = document.getElementById('asgn-cycle').value;
+  const cycleIds = getSelectedCycleIds();
   const clientId = document.getElementById('asgn-client').value;
-  if (!cycleId) return;
+  if (cycleIds.length === 0) { toast('Select at least one billing cycle', 'error'); return; }
   const checked = [...document.querySelectorAll('.asgn-chk:checked')].map(c=>c.dataset.id);
-  if (checked.length===0) { toast('Select at least one consultant','error'); return; }
+  if (checked.length === 0) { toast('Select at least one consultant', 'error'); return; }
 
-  const { data: existing } = await sb.from('consultant_billing_cycles').select('consultant_id').eq('billing_cycle_id',cycleId);
-  const existingIds = (existing||[]).map(e=>e.consultant_id);
-
-  const toInsert = [];
-  const toUpdate = [];
-  for (const cId of checked) {
-    const rate = document.getElementById(`rate-${cId}`)?.value || null;
-    const sdate = document.getElementById(`sdate-${cId}`)?.value || null;
-    if (existingIds.includes(cId)) toUpdate.push({ consultant_id:cId, billing_rate:rate, start_date:sdate });
-    else toInsert.push({ consultant_id:cId, billing_cycle_id:cycleId, billing_rate:rate, start_date:sdate });
-
-    // Save rate to consultant_client_rates
-    await sb.from('consultant_client_rates').upsert({ consultant_id:cId, client_id:clientId, billing_rate:rate }, { onConflict:'consultant_id,client_id' });
+  for (const cycleId of cycleIds) {
+    const { data: existing } = await sb.from('consultant_billing_cycles').select('consultant_id').eq('billing_cycle_id', cycleId);
+    const existingIds = (existing||[]).map(e=>e.consultant_id);
+    const toInsert = [];
+    const toUpdate = [];
+    for (const cId of checked) {
+      const rate = document.getElementById(`rate-${cId}`)?.value || null;
+      const sdate = document.getElementById(`sdate-${cId}`)?.value || null;
+      const edate = document.getElementById(`edate-${cId}`)?.value || null;
+      if (existingIds.includes(cId)) toUpdate.push({ consultant_id:cId, billing_rate:rate, start_date:sdate, end_date:edate });
+      else toInsert.push({ consultant_id:cId, billing_cycle_id:cycleId, billing_rate:rate, start_date:sdate, end_date:edate });
+      await sb.from('consultant_client_rates').upsert({ consultant_id:cId, client_id:clientId, billing_rate:rate }, { onConflict:'consultant_id,client_id' });
+    }
+    if (toInsert.length) await sb.from('consultant_billing_cycles').insert(toInsert);
+    for (const u of toUpdate) await sb.from('consultant_billing_cycles').update({ billing_rate:u.billing_rate, start_date:u.start_date, end_date:u.end_date }).eq('consultant_id',u.consultant_id).eq('billing_cycle_id',cycleId);
   }
-  if (toInsert.length) await sb.from('consultant_billing_cycles').insert(toInsert);
-  for (const u of toUpdate) await sb.from('consultant_billing_cycles').update({ billing_rate:u.billing_rate, start_date:u.start_date }).eq('consultant_id',u.consultant_id).eq('billing_cycle_id',cycleId);
 
-  toast(`${checked.length} consultant(s) assigned`);
+  toast(`${checked.length} consultant(s) assigned to ${cycleIds.length} cycle(s)`);
   await fetchAssignments();
   loadAssignments();
 }
 
 async function bulkUnassign() {
-  const cycleId = document.getElementById('asgn-cycle').value;
-  if (!cycleId) return;
+  const cycleIds = getSelectedCycleIds();
+  if (cycleIds.length === 0) { toast('Select at least one billing cycle', 'error'); return; }
   const checked = [...document.querySelectorAll('.asgn-chk:checked')].map(c=>c.dataset.id);
-  if (checked.length===0) { toast('Select consultants to unassign','error'); return; }
-  if (!confirm(`Unassign ${checked.length} consultant(s) from this cycle?`)) return;
-  for (const cId of checked) {
-    await sb.from('consultant_billing_cycles').delete().eq('consultant_id',cId).eq('billing_cycle_id',cycleId);
-    await sb.from('invoices').delete().eq('consultant_id',cId).eq('billing_cycle_id',cycleId).eq('status','pending');
+  if (checked.length === 0) { toast('Select consultants to unassign', 'error'); return; }
+  if (!confirm(`Unassign ${checked.length} consultant(s) from ${cycleIds.length} cycle(s)?`)) return;
+  for (const cycleId of cycleIds) {
+    for (const cId of checked) {
+      await sb.from('consultant_billing_cycles').delete().eq('consultant_id',cId).eq('billing_cycle_id',cycleId);
+      await sb.from('invoices').delete().eq('consultant_id',cId).eq('billing_cycle_id',cycleId).eq('status','pending');
+    }
   }
-  toast(`${checked.length} consultant(s) unassigned`);
+  toast(`${checked.length} consultant(s) unassigned from ${cycleIds.length} cycle(s)`);
   await fetchAssignments();
   loadAssignments();
+}
+
+// ============================================================
+//  BULK ADD CONSULTANTS
+// ============================================================
+function openBulkConsultantModal() {
+  document.getElementById('bulk-cons-input').value = '';
+  document.getElementById('bulk-cons-preview').innerHTML = '';
+  openModal('bulk-consultant-modal');
+}
+
+function parseBulkConsultants() {
+  const lines = document.getElementById('bulk-cons-input').value.split('\n').map(l=>l.trim()).filter(Boolean);
+  return lines.map(line => {
+    const parts = line.split(',').map(p=>p.trim());
+    return { name: parts[0]||'', email: parts[1]||'', phone: parts[2]||'' };
+  }).filter(c=>c.name);
+}
+
+function previewBulkConsultants() {
+  const parsed = parseBulkConsultants();
+  if (parsed.length === 0) { document.getElementById('bulk-cons-preview').innerHTML = '<span style="color:var(--danger);">No valid entries found.</span>'; return; }
+  document.getElementById('bulk-cons-preview').innerHTML =
+    `<div style="color:var(--success); font-weight:600; margin-bottom:6px;">✓ ${parsed.length} consultant(s) ready to add:</div>` +
+    parsed.map((c,i)=>`<div style="padding:3px 0; border-bottom:1px solid var(--border);">${i+1}. <strong>${c.name}</strong>${c.email?' &mdash; '+c.email:''}${c.phone?' &mdash; '+c.phone:''}</div>`).join('');
+}
+
+async function saveBulkConsultants() {
+  const parsed = parseBulkConsultants();
+  if (parsed.length === 0) { toast('No valid entries. Enter at least one name.', 'error'); return; }
+  const toInsert = parsed.map(c=>({ name:c.name, email:c.email||null, phone:c.phone||null }));
+  const { error } = await sb.from('consultants').insert(toInsert);
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  closeModal('bulk-consultant-modal');
+  toast(`${parsed.length} consultant(s) added`);
+  await loadAllData();
+  loadConsultants();
 }
 
 // ============================================================
@@ -1096,6 +1280,8 @@ function populateFilterDropdowns() {
     el.innerHTML = '<option value="">All Clients</option>' + _clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
     el.value = cur;
   });
+  const consSel = document.getElementById('f-consultant');
+  if (consSel) { const cur=consSel.value; consSel.innerHTML='<option value="">All Consultants</option>'+_consultants.map(c=>`<option value="${c.id}">${c.name}</option>`).join(''); consSel.value=cur; }
   const cycSel = document.getElementById('f-cycle');
   if (cycSel) { const cur=cycSel.value; cycSel.innerHTML='<option value="">All Cycles</option>'+_cycles.map(c=>`<option value="${c.id}">${c.start_date} → ${c.end_date}${c.label?' ('+c.label+')':''}</option>`).join(''); cycSel.value=cur; }
 }
@@ -1175,8 +1361,10 @@ CREATE TABLE consultant_billing_cycles (
   billing_cycle_id UUID REFERENCES billing_cycles(id) ON DELETE CASCADE,
   billing_rate NUMERIC(10,2),
   start_date DATE,
+  end_date DATE,
   UNIQUE(consultant_id, billing_cycle_id)
 );
+-- If table already exists, run: ALTER TABLE consultant_billing_cycles ADD COLUMN IF NOT EXISTS end_date DATE;
 
 CREATE TABLE consultant_client_rates (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
