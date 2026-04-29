@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>InvoiceFlow — Consultant Billing</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --brand: #1a56db;
+      --brand-dark: #1343a8;
+      --brand-light: #ebf0ff;
+      --success: #0e7c3a;
+      --success-light: #e6f4ec;
+      --warning: #b45309;
+      --warning-light: #fef3c7;
+      --danger: #c81e1e;
+      --danger-light: #fde8e8;
+      --surface: #ffffff;
+      --surface-2: #f8fafc;
+      --surface-3: #f1f5f9;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-2: #475569;
+      --text-3: #94a3b8;
+      --sidebar-w: 240px;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: 'IBM Plex Sans', sans-serif; background: var(--surface-2); color: var(--text); margin: 0; }
+    .mono { font-family: 'IBM Plex Mono', monospace; }
+
+    /* Sidebar */
+    #sidebar {
+      position: fixed; top: 0; left: 0; height: 100vh; width: var(--sidebar-w);
+      background: #0f172a; color: #e2e8f0; display: flex; flex-direction: column;
+      z-index: 50; border-right: 1px solid #1e293b;
+    }
+    .nav-link {
+      display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+      color: #94a3b8; font-size: 14px; font-weight: 500; cursor: pointer;
+      border-left: 3px solid transparent; transition: all 0.15s;
+    }
+    .nav-link:hover { background: #1e293b; color: #e2e8f0; }
+    .nav-link.active { background: #1e3a5f; color: #60a5fa; border-left-color: #3b82f6; }
+    .nav-icon { width: 18px; height: 18px; flex-shrink: 0; }
+
+    /* Main content */
+    #main { margin-left: var(--sidebar-w); min-height: 100vh; }
+    .topbar {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 28px; height: 58px; display: flex; align-items: center;
+      justify-content: space-between; position: sticky; top: 0; z-index: 40;
+    }
+    .page { padding: 28px; }
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* Cards */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+    .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .card-body { padding: 20px; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-primary { background: var(--brand); color: white; }
+    .btn-primary:hover { background: var(--brand-dark); }
+    .btn-secondary { background: var(--surface-3); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--border); }
+    .btn-danger { background: var(--danger-light); color: var(--danger); border: 1px solid #fca5a5; }
+    .btn-danger:hover { background: #fca5a5; }
+    .btn-success { background: var(--success-light); color: var(--success); border: 1px solid #6ee7b7; }
+    .btn-success:hover { background: #6ee7b7; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .btn-xs { padding: 3px 8px; font-size: 11px; }
+
+    /* Badges */
+    .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .badge-pending { background: var(--warning-light); color: var(--warning); }
+    .badge-invoiced { background: var(--success-light); color: var(--success); }
+    .badge-active { background: var(--brand-light); color: var(--brand); }
+
+    /* Table */
+    .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .tbl th { background: var(--surface-2); text-align: left; padding: 10px 14px; font-weight: 600; color: var(--text-2); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+    .tbl td { padding: 11px 14px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+    .tbl tr:last-child td { border-bottom: none; }
+    .tbl tr:hover td { background: var(--surface-2); }
+    .tbl input[type="checkbox"] { accent-color: var(--brand); width: 15px; height: 15px; }
+ 
+    /* Form */
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .form-control { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; color: var(--text); background: var(--surface); outline: none; transition: border 0.15s; }
+    .form-control:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(26,86,219,0.1); }
+    select.form-control { cursor: pointer; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.5); z-index: 100; display: none; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); border-radius: 10px; width: 100%; max-width: 520px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+    .modal-header { padding: 18px 22px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .modal-body { padding: 22px; }
+    .modal-footer { padding: 16px 22px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+    .modal-close { background: none; border: none; color: var(--text-3); cursor: pointer; font-size: 20px; line-height: 1; }
+
+    /* Login */
+    #login-screen { position: fixed; inset: 0; background: #0f172a; display: flex; align-items: center; justify-content: center; z-index: 200; }
+    .login-box { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 40px; width: 380px; }
+
+    /* Filter bar */
+    .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+    .filter-bar .form-group { margin-bottom: 0; min-width: 160px; }
+
+    /* Stats */
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 18px 22px; }
+    .stat-value { font-size: 28px; font-weight: 700; color: var(--text); line-height: 1; }
+    .stat-label { font-size: 12px; color: var(--text-2); margin-top: 4px; font-weight: 500; }
+
+    /* Toast */
+    #toast { position: fixed; bottom: 24px; right: 24px; z-index: 999; }
+    .toast-msg { background: #0f172a; color: #e2e8f0; padding: 12px 18px; border-radius: 8px; font-size: 13px; margin-top: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: slideIn 0.2s ease; }
+    .toast-msg.success { border-left: 3px solid #22c55e; }
+    .toast-msg.error { border-left: 3px solid #ef4444; }
+    @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* Config banner */
+    #config-banner { background: #fef3c7; border-bottom: 1px solid #fcd34d; padding: 10px 20px; font-size: 13px; color: #92400e; display: none; }
+    #config-banner.show { display: block; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* Responsive table wrapper */
+    .tbl-wrap { overflow-x: auto; }
+
+    /* Cycle chip */
+    .cycle-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--brand-light); color: var(--brand); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; margin: 2px; }
+  </style>
+</head>
+<body>
+
+<!-- CONFIG — paste your Supabase URL & anon key here -->
+<script>
+  const SUPABASE_URL = 'https://npkpfopaqpsbohywlhjf.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wa3Bmb3BhcXBzYm9oeXdsaGpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0ODg1MzIsImV4cCI6MjA5MzA2NDUzMn0.Cq_drn7edTGpTnZ1WYBiXtuHUmQdNQwlkIi_AlhQ87A';
+</script>
+
+<!-- Config Banner -->
+<div id="config-banner" class="show">
+  ⚠️ <strong>Setup required:</strong> Open this file and replace <code>YOUR_SUPABASE_URL</code> and <code>YOUR_SUPABASE_ANON_KEY</code> with your Supabase project credentials.
+</div>
+
+<!-- Login Screen -->
+<div id="login-screen">
+  <div class="login-box">
+    <div style="margin-bottom:28px; text-align:center;">
+      <div style="font-size:22px; font-weight:700; color:#f1f5f9; letter-spacing:-0.5px;">InvoiceFlow</div>
+      <div style="font-size:13px; color:#64748b; margin-top:4px;">Consultant Billing Management</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label" style="color:#94a3b8;">Email</label>
+      <input id="login-email" type="email" class="form-control" placeholder="you@company.com" style="background:#0f172a; border-color:#334155; color:#f1f5f9;">
+    </div>
+    <div class="form-group">
+      <label class="form-label" style="color:#94a3b8;">Password</label>
+      <input id="login-password" type="password" class="form-control" placeholder="••••••••" style="background:#0f172a; border-color:#334155; color:#f1f5f9;">
+    </div>
+    <button class="btn btn-primary" style="width:100%; justify-content:center; padding:10px;" onclick="doLogin()">Sign In</button>
+    <p id="login-err" style="color:#f87171; font-size:12px; margin-top:10px; text-align:center;"></p>
+    <div style="margin-top:20px; padding-top:16px; border-top:1px solid #334155;">
+      <p style="font-size:11px; color:#475569; text-align:center; margin:0;">Don't have an account?</p>
+      <button class="btn btn-secondary" style="width:100%; justify-content:center; margin-top:8px; background:#0f172a; border-color:#334155; color:#94a3b8;" onclick="doSignup()">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- App Shell -->
+<div id="app" style="display:none;">
+
+  <!-- Sidebar -->
+  <nav id="sidebar">
+    <div style="padding:20px; border-bottom:1px solid #1e293b;">
+      <div style="font-size:16px; font-weight:700; color:#f1f5f9; letter-spacing:-0.3px;">InvoiceFlow</div>
+      <div style="font-size:11px; color:#475569; margin-top:2px;">Billing Management</div>
+    </div>
+    <div style="flex:1; overflow-y:auto; padding:12px 0;">
+      <div style="font-size:10px; color:#475569; padding:6px 20px; letter-spacing:0.08em; font-weight:600; text-transform:uppercase;">Main</div>
+      <div class="nav-link active" onclick="showSection('dashboard')">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-link" onclick="showSection('pending')">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Pending Invoices
+        <span id="pending-badge" style="margin-left:auto; background:#dc2626; color:white; border-radius:999px; font-size:10px; padding:1px 7px; display:none;">0</span>
+      </div>
+      <div style="height:1px; background:#1e293b; margin:10px 0;"></div>
+      <div style="font-size:10px; color:#475569; padding:6px 20px; letter-spacing:0.08em; font-weight:600; text-transform:uppercase;">Manage</div>
+      <div class="nav-link" onclick="showSection('consultants')">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Consultants
+      </div>
+      <div class="nav-link" onclick="showSection('clients')">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+        Clients
+      </div>
+      <div class="nav-link" onclick="showSection('billing-cycles')">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        Billing Cycles
+      </div>
+      <div class="nav-link" onclick="showSection('assignments')">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        Assignments
+      </div>
+      <div style="height:1px; background:#1e293b; margin:10px 0;"></div>
+      <div class="nav-link" onclick="showSection('settings')">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Settings
+      </div>
+    </div>
+    <div style="padding:16px 20px; border-top:1px solid #1e293b;">
+      <div id="user-email-display" style="font-size:11px; color:#475569; margin-bottom:8px;"></div>
+      <button class="btn btn-secondary" style="width:100%; justify-content:center; background:#0f172a; border-color:#334155; color:#94a3b8; font-size:12px;" onclick="doLogout()">Sign Out</button>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <div id="main">
+    <div class="topbar">
+      <div id="page-title" style="font-size:16px; font-weight:600; color:var(--text);">Dashboard</div>
+      <div id="topbar-actions"></div>
+    </div>
+
+    <div class="page">
+
+      <!-- DASHBOARD -->
+      <div id="section-dashboard" class="section active">
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px;">
+          <div class="stat-card">
+            <div class="stat-value" id="stat-consultants">—</div>
+            <div class="stat-label">Total Consultants</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-clients">—</div>
+            <div class="stat-label">Active Clients</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-cycles">—</div>
+            <div class="stat-label">Billing Cycles</div>
+          </div>
+          <div class="stat-card" style="border-left:3px solid #ef4444;">
+            <div class="stat-value" style="color:#dc2626;" id="stat-pending">—</div>
+            <div class="stat-label">Pending Invoices</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span style="font-weight:600;">Recent Pending Invoices</span></div>
+          <div class="tbl-wrap"><table class="tbl" id="dash-pending-tbl"><thead><tr><th>Consultant</th><th>Client</th><th>Cycle</th><th>Period</th><th>Rate</th><th></th></tr></thead><tbody id="dash-pending-body"><tr><td colspan="6" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- PENDING INVOICES -->
+      <div id="section-pending" class="section">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-body">
+            <div class="filter-bar">
+              <div class="form-group"><label class="form-label">Client</label><select id="f-client" class="form-control" onchange="loadPending()"><option value="">All Clients</option></select></div>
+              <div class="form-group"><label class="form-label">Billing Cycle</label><select id="f-cycle" class="form-control" onchange="loadPending()"><option value="">All Cycles</option></select></div>
+              <div class="form-group"><label class="form-label">From Date</label><input type="date" id="f-from" class="form-control" onchange="loadPending()"></div>
+              <div class="form-group"><label class="form-label">To Date</label><input type="date" id="f-to" class="form-control" onchange="loadPending()"></div>
+              <div class="form-group"><label class="form-label">&nbsp;</label><button class="btn btn-secondary" onclick="clearFilters()">Clear</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span style="font-weight:600;">Pending Invoices</span></div>
+          <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Consultant</th><th>Client</th><th>Cycle</th><th>Period</th><th>Billing Rate</th><th>Actions</th></tr></thead><tbody id="pending-body"><tr><td colspan="6" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- CONSULTANTS -->
+      <div id="section-consultants" class="section">
+        <div class="card">
+          <div class="card-header">
+            <span style="font-weight:600;">Consultants</span>
+            <button class="btn btn-primary btn-sm" onclick="openConsultantModal()">+ Add Consultant</button>
+          </div>
+          <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Assigned Clients</th><th>Actions</th></tr></thead><tbody id="consultants-body"><tr><td colspan="5" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- CLIENTS -->
+      <div id="section-clients" class="section">
+        <div class="card">
+          <div class="card-header">
+            <span style="font-weight:600;">Clients</span>
+            <button class="btn btn-primary btn-sm" onclick="openClientModal()">+ Add Client</button>
+          </div>
+          <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Client Name</th><th>Contact</th><th>Email</th><th>Billing Cycles</th><th>Actions</th></tr></thead><tbody id="clients-body"><tr><td colspan="5" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- BILLING CYCLES -->
+      <div id="section-billing-cycles" class="section">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-body">
+            <div class="filter-bar">
+              <div class="form-group"><label class="form-label">Filter by Client</label><select id="bc-client-filter" class="form-control" onchange="loadBillingCycles()"><option value="">All Clients</option></select></div>
+              <div class="form-group"><label class="form-label">Start From</label><input type="date" id="bc-start-filter" class="form-control" onchange="loadBillingCycles()"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span style="font-weight:600;">Billing Cycles</span>
+            <button class="btn btn-primary btn-sm" onclick="openCycleModal()">+ Add Cycle(s)</button>
+          </div>
+          <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Client</th><th>Type</th><th>Period</th><th>Status</th><th>Assigned Consultants</th><th>Actions</th></tr></thead><tbody id="cycles-body"><tr><td colspan="6" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- ASSIGNMENTS -->
+      <div id="section-assignments" class="section">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-body">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+              <div class="form-group" style="margin:0;"><label class="form-label">Select Client</label><select id="asgn-client" class="form-control" onchange="onAssignClientChange()"><option value="">— Select Client —</option></select></div>
+              <div class="form-group" style="margin:0;"><label class="form-label">Select Billing Cycle</label><select id="asgn-cycle" class="form-control" onchange="loadAssignments()"><option value="">— Select Cycle —</option></select></div>
+            </div>
+          </div>
+        </div>
+        <div class="card" id="asgn-card" style="display:none;">
+          <div class="card-header">
+            <span style="font-weight:600;">Consultant Assignments</span>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-secondary btn-sm" onclick="selectAllConsultants(true)">Select All</button>
+              <button class="btn btn-secondary btn-sm" onclick="selectAllConsultants(false)">Deselect All</button>
+              <button class="btn btn-primary btn-sm" onclick="bulkAssign()">Assign Selected</button>
+              <button class="btn btn-danger btn-sm" onclick="bulkUnassign()">Unassign Selected</button>
+            </div>
+          </div>
+          <div class="tbl-wrap"><table class="tbl"><thead><tr><th><input type="checkbox" id="select-all-chk" onchange="selectAllConsultants(this.checked)"></th><th>Consultant</th><th>Billing Rate (for this client)</th><th>Start Date</th><th>Status</th></tr></thead><tbody id="asgn-body"></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div id="section-settings" class="section">
+        <div class="card" style="max-width:500px;">
+          <div class="card-header"><span style="font-weight:600;">Notification Settings</span></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Notification Email</label>
+              <input type="email" id="notif-email" class="form-control" placeholder="billing@yourcompany.com">
+              <p style="font-size:11px; color:var(--text-3); margin-top:4px;">An email is sent to this address on login when there are pending invoices.</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Supabase URL</label>
+              <input type="text" id="settings-sb-url" class="form-control" placeholder="https://xxx.supabase.co">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Supabase Anon Key</label>
+              <input type="text" id="settings-sb-key" class="form-control" placeholder="eyJ…">
+            </div>
+            <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /page -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- ======== MODALS ======== -->
+
+<!-- Consultant Modal -->
+<div class="modal-overlay" id="consultant-modal">
+  <div class="modal">
+    <div class="modal-header"><h3 style="font-size:15px; font-weight:600; margin:0;" id="consultant-modal-title">Add Consultant</h3><button class="modal-close" onclick="closeModal('consultant-modal')">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="cons-id">
+      <div class="form-group"><label class="form-label">Full Name *</label><input type="text" id="cons-name" class="form-control" placeholder="John Smith"></div>
+      <div class="form-group"><label class="form-label">Email</label><input type="email" id="cons-email" class="form-control" placeholder="john@example.com"></div>
+      <div class="form-group"><label class="form-label">Phone</label><input type="text" id="cons-phone" class="form-control" placeholder="+1 555 0000"></div>
+      <div class="form-group"><label class="form-label">Notes</label><textarea id="cons-notes" class="form-control" rows="2" placeholder="Any notes…"></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('consultant-modal')">Cancel</button><button class="btn btn-primary" onclick="saveConsultant()">Save</button></div>
+  </div>
+</div>
+
+<!-- Client Modal -->
+<div class="modal-overlay" id="client-modal">
+  <div class="modal">
+    <div class="modal-header"><h3 style="font-size:15px; font-weight:600; margin:0;" id="client-modal-title">Add Client</h3><button class="modal-close" onclick="closeModal('client-modal')">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="cli-id">
+      <div class="form-group"><label class="form-label">Company Name *</label><input type="text" id="cli-name" class="form-control" placeholder="Acme Corp"></div>
+      <div class="form-group"><label class="form-label">Contact Person</label><input type="text" id="cli-contact" class="form-control" placeholder="Jane Doe"></div>
+      <div class="form-group"><label class="form-label">Email</label><input type="email" id="cli-email" class="form-control" placeholder="billing@acme.com"></div>
+      <div class="form-group"><label class="form-label">Phone</label><input type="text" id="cli-phone" class="form-control"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('client-modal')">Cancel</button><button class="btn btn-primary" onclick="saveClient()">Save</button></div>
+  </div>
+</div>
+
+<!-- Billing Cycle Modal -->
+<div class="modal-overlay" id="cycle-modal">
+  <div class="modal" style="max-width:580px;">
+    <div class="modal-header"><h3 style="font-size:15px; font-weight:600; margin:0;">Add Billing Cycle(s)</h3><button class="modal-close" onclick="closeModal('cycle-modal')">×</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Client *</label><select id="cyc-client" class="form-control"><option value="">— Select Client —</option></select></div>
+      <div class="form-group"><label class="form-label">Cycle Type</label>
+        <select id="cyc-type" class="form-control" onchange="onCycleTypeChange()">
+          <option value="custom">Custom Date Range</option>
+          <option value="monthly">Monthly</option>
+          <option value="biweekly">Bi-Weekly</option>
+          <option value="weekly">Weekly</option>
+        </select>
+      </div>
+      <div id="cyc-custom-fields">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="form-group"><label class="form-label">Start Date *</label><input type="date" id="cyc-start" class="form-control"></div>
+          <div class="form-group"><label class="form-label">End Date *</label><input type="date" id="cyc-end" class="form-control"></div>
+        </div>
+      </div>
+      <div id="cyc-auto-fields" style="display:none;">
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;">
+          <div class="form-group"><label class="form-label">Start Date *</label><input type="date" id="cyc-auto-start" class="form-control"></div>
+          <div class="form-group"><label class="form-label">Number of Cycles</label><input type="number" id="cyc-count" class="form-control" value="1" min="1" max="52"></div>
+          <div class="form-group"><label class="form-label">Preview</label><div id="cyc-preview" style="font-size:11px; color:var(--text-2); padding:8px 0;"></div></div>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:-8px; margin-bottom:8px;" onclick="previewCycles()">Preview Cycles</button>
+        <div id="cyc-preview-list" style="font-size:12px; color:var(--text-2);"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Label / Notes</label><input type="text" id="cyc-label" class="form-control" placeholder="e.g. Q1 2025, Sprint 1…"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('cycle-modal')">Cancel</button><button class="btn btn-primary" onclick="saveCycle()">Create Cycle(s)</button></div>
+  </div>
+</div>
+
+<!-- Mark as Invoiced Modal -->
+<div class="modal-overlay" id="invoice-modal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header"><h3 style="font-size:15px; font-weight:600; margin:0;">Mark as Invoiced</h3><button class="modal-close" onclick="closeModal('invoice-modal')">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="inv-pending-id">
+      <p style="font-size:13px; color:var(--text-2); margin-bottom:16px;" id="inv-desc"></p>
+      <div class="form-group"><label class="form-label">Invoice Number <span style="font-weight:400; color:var(--text-3);">(Optional)</span></label><input type="text" id="inv-number" class="form-control" placeholder="INV-001"></div>
+      <div class="form-group"><label class="form-label">Invoice Date</label><input type="date" id="inv-date" class="form-control"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('invoice-modal')">Cancel</button><button class="btn btn-success" onclick="confirmMarkInvoiced()">Confirm — Mark as Invoiced</button></div>
+  </div>
+</div>
+
+<!-- Assign Start Date Modal -->
+<div class="modal-overlay" id="startdate-modal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header"><h3 style="font-size:15px; font-weight:600; margin:0;">Set Consultant Start Date</h3><button class="modal-close" onclick="closeModal('startdate-modal')">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="sd-consultant-id">
+      <input type="hidden" id="sd-client-id">
+      <div class="form-group"><label class="form-label">Start Date *</label><input type="date" id="sd-start-date" class="form-control"></div>
+      <div class="form-group"><label class="form-label">Billing Rate (per hour/day) *</label><input type="number" id="sd-rate" class="form-control" placeholder="0.00" step="0.01"></div>
+      <div class="form-group"><label class="form-label">Assign Billing Cycles</label>
+        <select id="sd-cycle-assign" class="form-control">
+          <option value="all">All remaining cycles from start date</option>
+          <option value="specific">Let me pick specific cycles</option>
+        </select>
+      </div>
+      <div id="sd-specific-cycles" style="display:none; margin-top:10px; max-height:160px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:10px;" id="sd-cycle-list"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('startdate-modal')">Cancel</button><button class="btn btn-primary" onclick="confirmAssign()">Assign</button></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  SUPABASE INIT
+// ============================================================
+let sb;
+function initSupabase() {
+  try {
+    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+      document.getElementById('config-banner').classList.add('show');
+    } else {
+      document.getElementById('config-banner').classList.remove('show');
+    }
+  } catch(e) { console.error('Supabase init failed', e); }
+}
+
+// ============================================================
+//  TOAST
+// ============================================================
+function toast(msg, type='success') {
+  const el = document.createElement('div');
+  el.className = `toast-msg ${type}`;
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ============================================================
+//  AUTH
+// ============================================================
+async function doLogin() {
+  const email = document.getElementById('login-email').value;
+  const pw = document.getElementById('login-password').value;
+  document.getElementById('login-err').textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email, password: pw });
+  if (error) { document.getElementById('login-err').textContent = error.message; return; }
+  onLoggedIn(email);
+}
+
+async function doSignup() {
+  const email = document.getElementById('login-email').value;
+  const pw = document.getElementById('login-password').value;
+  if (!email || !pw) { document.getElementById('login-err').textContent = 'Enter email and password.'; return; }
+  const { error } = await sb.auth.signUp({ email, password: pw });
+  if (error) { document.getElementById('login-err').textContent = error.message; }
+  else { document.getElementById('login-err').style.color = '#22c55e'; document.getElementById('login-err').textContent = 'Account created! Check email to confirm, then sign in.'; }
+}
+
+async function onLoggedIn(email) {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('user-email-display').textContent = email;
+  await loadAllData();
+  await checkPendingOnLogin();
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  location.reload();
+}
+
+// ============================================================
+//  NAVIGATION
+// ============================================================
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
+  document.getElementById(`section-${id}`).classList.add('active');
+  const titles = { dashboard:'Dashboard', pending:'Pending Invoices', consultants:'Consultants', clients:'Clients', 'billing-cycles':'Billing Cycles', assignments:'Assignments', settings:'Settings' };
+  document.getElementById('page-title').textContent = titles[id] || id;
+  const navMap = { dashboard:0, pending:1, consultants:3, clients:4, 'billing-cycles':5, assignments:6, settings:8 };
+  document.querySelectorAll('.nav-link')[navMap[id]]?.classList.add('active');
+  // lazy-load sections
+  if (id === 'pending') loadPending();
+  if (id === 'consultants') loadConsultants();
+  if (id === 'clients') loadClients();
+  if (id === 'billing-cycles') loadBillingCycles();
+  if (id === 'assignments') loadAssignmentDropdowns();
+  if (id === 'settings') loadSettings();
+}
+
+// ============================================================
+//  DATA CACHE
+// ============================================================
+let _consultants = [], _clients = [], _cycles = [], _assignments = [], _pendingInvoices = [];
+
+async function loadAllData() {
+  await Promise.all([fetchConsultants(), fetchClients(), fetchCycles(), fetchAssignments()]);
+  await autoGeneratePending();
+  await fetchPendingInvoices();
+  loadDashboard();
+}
+
+async function fetchConsultants() {
+  const { data } = await sb.from('consultants').select('*').order('name');
+  _consultants = data || [];
+}
+async function fetchClients() {
+  const { data } = await sb.from('clients').select('*').order('name');
+  _clients = data || [];
+}
+async function fetchCycles() {
+  const { data } = await sb.from('billing_cycles').select('*').order('start_date');
+  _cycles = data || [];
+}
+async function fetchAssignments() {
+  const { data } = await sb.from('consultant_billing_cycles').select('*');
+  _assignments = data || [];
+}
+async function fetchPendingInvoices() {
+  const { data } = await sb.from('invoices').select('*').eq('status','pending');
+  _pendingInvoices = data || [];
+}
+
+// ============================================================
+//  AUTO-GENERATE PENDING INVOICES
+// ============================================================
+async function autoGeneratePending() {
+  const today = new Date().toISOString().split('T')[0];
+  const { data: existing } = await sb.from('invoices').select('consultant_id,billing_cycle_id').in('status',['pending','invoiced']);
+  const existingSet = new Set((existing||[]).map(e => `${e.consultant_id}__${e.billing_cycle_id}`));
+
+  const toInsert = [];
+  for (const asgn of _assignments) {
+    const cycle = _cycles.find(c => c.id === asgn.billing_cycle_id);
+    if (!cycle) continue;
+    if (cycle.end_date < today) {
+      const key = `${asgn.consultant_id}__${asgn.billing_cycle_id}`;
+      if (!existingSet.has(key)) {
+        toInsert.push({ consultant_id: asgn.consultant_id, billing_cycle_id: asgn.billing_cycle_id, client_id: cycle.client_id, status: 'pending', billing_rate: asgn.billing_rate });
+      }
+    }
+  }
+  if (toInsert.length) await sb.from('invoices').insert(toInsert);
+}
+
+// ============================================================
+//  DASHBOARD
+// ============================================================
+function loadDashboard() {
+  document.getElementById('stat-consultants').textContent = _consultants.length;
+  document.getElementById('stat-clients').textContent = _clients.length;
+  document.getElementById('stat-cycles').textContent = _cycles.length;
+  document.getElementById('stat-pending').textContent = _pendingInvoices.length;
+
+  const badge = document.getElementById('pending-badge');
+  if (_pendingInvoices.length > 0) { badge.textContent = _pendingInvoices.length; badge.style.display = 'inline'; }
+  else { badge.style.display = 'none'; }
+
+  const tbody = document.getElementById('dash-pending-body');
+  if (_pendingInvoices.length === 0) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--text-3); text-align:center; padding:30px;">No pending invoices</td></tr>`; return; }
+  tbody.innerHTML = _pendingInvoices.slice(0,8).map(inv => {
+    const cons = _consultants.find(c => c.id === inv.consultant_id);
+    const cli = _clients.find(c => c.id === inv.client_id);
+    const cyc = _cycles.find(c => c.id === inv.billing_cycle_id);
+    return `<tr>
+      <td><strong>${cons?.name || '—'}</strong></td>
+      <td>${cli?.name || '—'}</td>
+      <td>${cyc?.label || cycleLabel(cyc)}</td>
+      <td class="mono" style="font-size:12px;">${cyc?.start_date || ''} → ${cyc?.end_date || ''}</td>
+      <td class="mono">$${inv.billing_rate || '—'}</td>
+      <td><button class="btn btn-success btn-xs" onclick="openInvoiceModal('${inv.id}')">Mark Invoiced</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ============================================================
+//  PENDING INVOICES
+// ============================================================
+async function loadPending() {
+  const { data } = await sb.from('invoices').select('*').eq('status','pending');
+  let rows = data || [];
+
+  const clientFilter = document.getElementById('f-client').value;
+  const cycleFilter = document.getElementById('f-cycle').value;
+  const fromFilter = document.getElementById('f-from').value;
+  const toFilter = document.getElementById('f-to').value;
+
+  if (clientFilter) rows = rows.filter(r => r.client_id === clientFilter);
+  if (cycleFilter) rows = rows.filter(r => r.billing_cycle_id === cycleFilter);
+  if (fromFilter) rows = rows.filter(r => { const cyc = _cycles.find(c=>c.id===r.billing_cycle_id); return cyc && cyc.start_date >= fromFilter; });
+  if (toFilter) rows = rows.filter(r => { const cyc = _cycles.find(c=>c.id===r.billing_cycle_id); return cyc && cyc.end_date <= toFilter; });
+
+  const tbody = document.getElementById('pending-body');
+  if (rows.length === 0) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--text-3); text-align:center; padding:30px;">No pending invoices match filters</td></tr>`; return; }
+  tbody.innerHTML = rows.map(inv => {
+    const cons = _consultants.find(c => c.id === inv.consultant_id);
+    const cli = _clients.find(c => c.id === inv.client_id);
+    const cyc = _cycles.find(c => c.id === inv.billing_cycle_id);
+    return `<tr>
+      <td><strong>${cons?.name || '—'}</strong></td>
+      <td>${cli?.name || '—'}</td>
+      <td>${cyc?.label || cycleLabel(cyc)}</td>
+      <td class="mono" style="font-size:12px;">${cyc?.start_date||''} → ${cyc?.end_date||''}</td>
+      <td class="mono">$${inv.billing_rate||'—'}/hr</td>
+      <td style="display:flex; gap:6px;">
+        <button class="btn btn-success btn-xs" onclick="openInvoiceModal('${inv.id}')">Mark Invoiced</button>
+        <button class="btn btn-danger btn-xs" onclick="removePendingInvoice('${inv.id}','${inv.consultant_id}','${inv.billing_cycle_id}')">Remove</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function clearFilters() {
+  document.getElementById('f-client').value = '';
+  document.getElementById('f-cycle').value = '';
+  document.getElementById('f-from').value = '';
+  document.getElementById('f-to').value = '';
+  loadPending();
+}
+
+async function removePendingInvoice(invId, consultantId, cycleId) {
+  if (!confirm('Remove this pending invoice? The consultant will be unassigned from this billing cycle.')) return;
+  await sb.from('invoices').delete().eq('id', invId);
+  await sb.from('consultant_billing_cycles').delete().eq('consultant_id', consultantId).eq('billing_cycle_id', cycleId);
+  toast('Invoice removed and consultant unassigned from cycle.');
+  await fetchAssignments();
+  await fetchPendingInvoices();
+  loadPending();
+  loadDashboard();
+}
+
+// ============================================================
+//  MARK AS INVOICED
+// ============================================================
+function openInvoiceModal(invId) {
+  const inv = [..._pendingInvoices, ...(window._allPending||[])].find(i => i.id === invId) || { id: invId };
+  document.getElementById('inv-pending-id').value = invId;
+  document.getElementById('inv-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('inv-number').value = '';
+  const cons = _consultants.find(c => c.id === inv.consultant_id);
+  const cli = _clients.find(c => c.id === inv.client_id);
+  document.getElementById('inv-desc').textContent = `Consultant: ${cons?.name||'—'} | Client: ${cli?.name||'—'}`;
+  openModal('invoice-modal');
+}
+
+async function confirmMarkInvoiced() {
+  const id = document.getElementById('inv-pending-id').value;
+  const num = document.getElementById('inv-number').value;
+  const date = document.getElementById('inv-date').value;
+  await sb.from('invoices').update({ status:'invoiced', invoice_number: num||null, invoice_date: date }).eq('id', id);
+  toast('Marked as invoiced!');
+  closeModal('invoice-modal');
+  await fetchPendingInvoices();
+  loadDashboard();
+  loadPending();
+}
+
+// ============================================================
+//  CONSULTANTS
+// ============================================================
+async function loadConsultants() {
+  await fetchConsultants();
+  const tbody = document.getElementById('consultants-body');
+  if (_consultants.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="color:var(--text-3); text-align:center; padding:30px;">No consultants yet. Add one to get started.</td></tr>`; return; }
+  tbody.innerHTML = _consultants.map(c => {
+    const clientIds = [...new Set(_assignments.filter(a=>a.consultant_id===c.id).map(a=>{ const cyc=_cycles.find(cy=>cy.id===a.billing_cycle_id); return cyc?.client_id; }).filter(Boolean))];
+    const clientNames = clientIds.map(id => _clients.find(cl=>cl.id===id)?.name).filter(Boolean);
+    return `<tr>
+      <td><strong>${c.name}</strong>${c.notes?`<br><span style="font-size:11px;color:var(--text-3);">${c.notes}</span>`:''}` +`</td>
+      <td>${c.email||'—'}</td>
+      <td>${c.phone||'—'}</td>
+      <td>${clientNames.map(n=>`<span class="cycle-chip">${n}</span>`).join('')||'<span style="color:var(--text-3);font-size:12px;">None</span>'}</td>
+      <td style="display:flex;gap:6px;">
+        <button class="btn btn-secondary btn-xs" onclick="openConsultantModal('${c.id}')">Edit</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteConsultant('${c.id}')">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openConsultantModal(id) {
+  document.getElementById('cons-id').value = '';
+  document.getElementById('cons-name').value = '';
+  document.getElementById('cons-email').value = '';
+  document.getElementById('cons-phone').value = '';
+  document.getElementById('cons-notes').value = '';
+  document.getElementById('consultant-modal-title').textContent = 'Add Consultant';
+  if (id) {
+    const c = _consultants.find(x=>x.id===id);
+    if (c) { document.getElementById('cons-id').value=c.id; document.getElementById('cons-name').value=c.name; document.getElementById('cons-email').value=c.email||''; document.getElementById('cons-phone').value=c.phone||''; document.getElementById('cons-notes').value=c.notes||''; document.getElementById('consultant-modal-title').textContent='Edit Consultant'; }
+  }
+  openModal('consultant-modal');
+}
+
+async function saveConsultant() {
+  const id = document.getElementById('cons-id').value;
+  const name = document.getElementById('cons-name').value.trim();
+  if (!name) { toast('Name is required','error'); return; }
+  const payload = { name, email: document.getElementById('cons-email').value, phone: document.getElementById('cons-phone').value, notes: document.getElementById('cons-notes').value };
+  if (id) await sb.from('consultants').update(payload).eq('id',id);
+  else await sb.from('consultants').insert(payload);
+  closeModal('consultant-modal');
+  toast(id ? 'Consultant updated' : 'Consultant added');
+  await loadAllData();
+  loadConsultants();
+}
+
+async function deleteConsultant(id) {
+  if (!confirm('Delete this consultant? All assignments and invoices will also be removed.')) return;
+  await sb.from('invoices').delete().eq('consultant_id',id);
+  await sb.from('consultant_billing_cycles').delete().eq('consultant_id',id);
+  await sb.from('consultants').delete().eq('id',id);
+  toast('Consultant deleted');
+  await loadAllData();
+  loadConsultants();
+}
+
+// ============================================================
+//  CLIENTS
+// ============================================================
+async function loadClients() {
+  await fetchClients();
+  const tbody = document.getElementById('clients-body');
+  if (_clients.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="color:var(--text-3); text-align:center; padding:30px;">No clients yet.</td></tr>`; return; }
+  tbody.innerHTML = _clients.map(c => {
+    const cycleCount = _cycles.filter(cy=>cy.client_id===c.id).length;
+    return `<tr>
+      <td><strong>${c.name}</strong></td>
+      <td>${c.contact||'—'}</td>
+      <td>${c.email||'—'}</td>
+      <td><span class="badge badge-active">${cycleCount} cycle${cycleCount!==1?'s':''}</span></td>
+      <td style="display:flex;gap:6px;">
+        <button class="btn btn-secondary btn-xs" onclick="openClientModal('${c.id}')">Edit</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteClient('${c.id}')">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openClientModal(id) {
+  document.getElementById('cli-id').value = '';
+  document.getElementById('cli-name').value = '';
+  document.getElementById('cli-contact').value = '';
+  document.getElementById('cli-email').value = '';
+  document.getElementById('cli-phone').value = '';
+  document.getElementById('client-modal-title').textContent = 'Add Client';
+  if (id) {
+    const c = _clients.find(x=>x.id===id);
+    if (c) { document.getElementById('cli-id').value=c.id; document.getElementById('cli-name').value=c.name; document.getElementById('cli-contact').value=c.contact||''; document.getElementById('cli-email').value=c.email||''; document.getElementById('cli-phone').value=c.phone||''; document.getElementById('client-modal-title').textContent='Edit Client'; }
+  }
+  openModal('client-modal');
+}
+
+async function saveClient() {
+  const id = document.getElementById('cli-id').value;
+  const name = document.getElementById('cli-name').value.trim();
+  if (!name) { toast('Client name is required','error'); return; }
+  const payload = { name, contact: document.getElementById('cli-contact').value, email: document.getElementById('cli-email').value, phone: document.getElementById('cli-phone').value };
+  if (id) await sb.from('clients').update(payload).eq('id',id);
+  else await sb.from('clients').insert(payload);
+  closeModal('client-modal');
+  toast(id ? 'Client updated' : 'Client added');
+  await loadAllData();
+  loadClients();
+}
+
+async function deleteClient(id) {
+  if (!confirm('Delete this client? All billing cycles and invoices for this client will also be removed.')) return;
+  const cycleIds = _cycles.filter(c=>c.client_id===id).map(c=>c.id);
+  if (cycleIds.length) {
+    await sb.from('invoices').delete().in('billing_cycle_id',cycleIds);
+    await sb.from('consultant_billing_cycles').delete().in('billing_cycle_id',cycleIds);
+    await sb.from('billing_cycles').delete().in('id',cycleIds);
+  }
+  await sb.from('clients').delete().eq('id',id);
+  toast('Client deleted');
+  await loadAllData();
+  loadClients();
+}
+
+// ============================================================
+//  BILLING CYCLES
+// ============================================================
+async function loadBillingCycles() {
+  await fetchCycles();
+  const clientFilter = document.getElementById('bc-client-filter').value;
+  const startFilter = document.getElementById('bc-start-filter').value;
+  let rows = _cycles;
+  if (clientFilter) rows = rows.filter(c => c.client_id === clientFilter);
+  if (startFilter) rows = rows.filter(c => c.start_date >= startFilter);
+
+  const tbody = document.getElementById('cycles-body');
+  if (rows.length === 0) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--text-3); text-align:center; padding:30px;">No billing cycles found.</td></tr>`; return; }
+  const today = new Date().toISOString().split('T')[0];
+  tbody.innerHTML = rows.map(c => {
+    const cli = _clients.find(cl=>cl.id===c.client_id);
+    const assigned = _assignments.filter(a=>a.billing_cycle_id===c.id);
+    const consNames = assigned.map(a=>_consultants.find(co=>co.id===a.consultant_id)?.name).filter(Boolean);
+    let status = c.end_date < today ? 'ended' : (c.start_date <= today ? 'active' : 'upcoming');
+    const statusBadge = status==='ended' ? `<span class="badge badge-pending">Ended</span>` : status==='active' ? `<span class="badge badge-active">Active</span>` : `<span class="badge" style="background:var(--surface-3);color:var(--text-2);">Upcoming</span>`;
+    return `<tr>
+      <td>${cli?.name||'—'}</td>
+      <td><span class="badge badge-active" style="background:var(--surface-3);color:var(--text-2);text-transform:capitalize;">${c.cycle_type||'custom'}</span></td>
+      <td class="mono" style="font-size:12px;">${c.start_date} → ${c.end_date}<br><span style="color:var(--text-3);font-family:inherit;">${c.label||''}</span></td>
+      <td>${statusBadge}</td>
+      <td>${consNames.map(n=>`<span class="cycle-chip">${n}</span>`).join('')||'<span style="color:var(--text-3);font-size:12px;">None</span>'}</td>
+      <td style="display:flex;gap:6px;">
+        <button class="btn btn-danger btn-xs" onclick="deleteCycle('${c.id}')">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function cycleLabel(cyc) { if(!cyc) return '—'; return `${cyc.start_date} → ${cyc.end_date}`; }
+
+function onCycleTypeChange() {
+  const t = document.getElementById('cyc-type').value;
+  document.getElementById('cyc-custom-fields').style.display = t==='custom' ? 'block' : 'none';
+  document.getElementById('cyc-auto-fields').style.display = t!=='custom' ? 'block' : 'none';
+}
+
+function previewCycles() {
+  const type = document.getElementById('cyc-type').value;
+  const start = document.getElementById('cyc-auto-start').value;
+  const count = parseInt(document.getElementById('cyc-count').value) || 1;
+  if (!start) return;
+  const cycles = generateCycles(type, start, count);
+  document.getElementById('cyc-preview-list').innerHTML = cycles.map((c,i) => `<div style="padding:3px 0;">${i+1}. ${c.start} → ${c.end}</div>`).join('');
+}
+
+function generateCycles(type, startStr, count) {
+  const results = [];
+  let current = new Date(startStr);
+  for (let i=0; i<count; i++) {
+    const s = current.toISOString().split('T')[0];
+    let end = new Date(current);
+    if (type==='monthly') { end.setMonth(end.getMonth()+1); end.setDate(end.getDate()-1); }
+    else if (type==='biweekly') { end.setDate(end.getDate()+13); }
+    else if (type==='weekly') { end.setDate(end.getDate()+6); }
+    const e = end.toISOString().split('T')[0];
+    results.push({ start: s, end: e });
+    current = new Date(end); current.setDate(current.getDate()+1);
+  }
+  return results;
+}
+
+async function saveCycle() {
+  const clientId = document.getElementById('cyc-client').value;
+  const type = document.getElementById('cyc-type').value;
+  const label = document.getElementById('cyc-label').value;
+  if (!clientId) { toast('Select a client','error'); return; }
+
+  let toInsert = [];
+  if (type==='custom') {
+    const s = document.getElementById('cyc-start').value;
+    const e = document.getElementById('cyc-end').value;
+    if (!s||!e) { toast('Set start and end dates','error'); return; }
+    toInsert.push({ client_id:clientId, cycle_type:'custom', start_date:s, end_date:e, label });
+  } else {
+    const s = document.getElementById('cyc-auto-start').value;
+    const count = parseInt(document.getElementById('cyc-count').value)||1;
+    if (!s) { toast('Set start date','error'); return; }
+    const cycles = generateCycles(type, s, count);
+    toInsert = cycles.map(c => ({ client_id:clientId, cycle_type:type, start_date:c.start, end_date:c.end, label }));
+  }
+  await sb.from('billing_cycles').insert(toInsert);
+  closeModal('cycle-modal');
+  toast(`${toInsert.length} billing cycle(s) created`);
+  await loadAllData();
+  loadBillingCycles();
+}
+
+async function deleteCycle(id) {
+  if (!confirm('Delete this billing cycle? All associated invoices and assignments will be removed.')) return;
+  await sb.from('invoices').delete().eq('billing_cycle_id',id);
+  await sb.from('consultant_billing_cycles').delete().eq('billing_cycle_id',id);
+  await sb.from('billing_cycles').delete().eq('id',id);
+  toast('Billing cycle deleted');
+  await loadAllData();
+  loadBillingCycles();
+}
+
+function openCycleModal() {
+  document.getElementById('cyc-client').innerHTML = '<option value="">— Select Client —</option>' + _clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  document.getElementById('cyc-type').value = 'custom';
+  document.getElementById('cyc-start').value = '';
+  document.getElementById('cyc-end').value = '';
+  document.getElementById('cyc-label').value = '';
+  document.getElementById('cyc-preview-list').innerHTML = '';
+  onCycleTypeChange();
+  openModal('cycle-modal');
+}
+
+// ============================================================
+//  ASSIGNMENTS
+// ============================================================
+async function loadAssignmentDropdowns() {
+  const sel = document.getElementById('asgn-client');
+  sel.innerHTML = '<option value="">— Select Client —</option>' + _clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  document.getElementById('asgn-cycle').innerHTML = '<option value="">— Select Cycle —</option>';
+  document.getElementById('asgn-card').style.display = 'none';
+}
+
+function onAssignClientChange() {
+  const clientId = document.getElementById('asgn-client').value;
+  const cyc = document.getElementById('asgn-cycle');
+  cyc.innerHTML = '<option value="">— Select Cycle —</option>';
+  if (!clientId) { document.getElementById('asgn-card').style.display='none'; return; }
+  const clientCycles = _cycles.filter(c=>c.client_id===clientId);
+  clientCycles.forEach(c => { cyc.innerHTML += `<option value="${c.id}">${c.start_date} → ${c.end_date} ${c.label?'('+c.label+')':''}</option>`; });
+}
+
+async function loadAssignments() {
+  const cycleId = document.getElementById('asgn-cycle').value;
+  if (!cycleId) { document.getElementById('asgn-card').style.display='none'; return; }
+  const clientId = document.getElementById('asgn-client').value;
+  document.getElementById('asgn-card').style.display = 'block';
+
+  // Get existing assignments for this cycle
+  const { data: cycleAssignments } = await sb.from('consultant_billing_cycles').select('*').eq('billing_cycle_id',cycleId);
+  // Get client rates
+  const { data: clientRates } = await sb.from('consultant_client_rates').select('*').eq('client_id',clientId);
+
+  const tbody = document.getElementById('asgn-body');
+  tbody.innerHTML = _consultants.map(c => {
+    const asgn = (cycleAssignments||[]).find(a=>a.consultant_id===c.id);
+    const rate = (clientRates||[]).find(r=>r.consultant_id===c.id);
+    const isAssigned = !!asgn;
+    return `<tr id="asgn-row-${c.id}">
+      <td><input type="checkbox" class="asgn-chk" data-id="${c.id}" ${isAssigned?'checked':''}></td>
+      <td><strong>${c.name}</strong><br><span style="font-size:11px;color:var(--text-3);">${c.email||''}</span></td>
+      <td><div style="display:flex;align-items:center;gap:6px;"><span style="color:var(--text-3);font-size:12px;">$</span><input type="number" id="rate-${c.id}" class="form-control" style="width:100px;" placeholder="0.00" step="0.01" value="${asgn?.billing_rate||rate?.billing_rate||''}"></div></td>
+      <td><input type="date" id="sdate-${c.id}" class="form-control" style="width:150px;" value="${asgn?.start_date||''}"></td>
+      <td>${isAssigned ? '<span class="badge badge-active">Assigned</span>' : '<span class="badge" style="background:var(--surface-3);color:var(--text-2);">Unassigned</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function selectAllConsultants(checked) {
+  document.querySelectorAll('.asgn-chk').forEach(c => c.checked = checked);
+  document.getElementById('select-all-chk').checked = checked;
+}
+
+async function bulkAssign() {
+  const cycleId = document.getElementById('asgn-cycle').value;
+  const clientId = document.getElementById('asgn-client').value;
+  if (!cycleId) return;
+  const checked = [...document.querySelectorAll('.asgn-chk:checked')].map(c=>c.dataset.id);
+  if (checked.length===0) { toast('Select at least one consultant','error'); return; }
+
+  const { data: existing } = await sb.from('consultant_billing_cycles').select('consultant_id').eq('billing_cycle_id',cycleId);
+  const existingIds = (existing||[]).map(e=>e.consultant_id);
+
+  const toInsert = [];
+  const toUpdate = [];
+  for (const cId of checked) {
+    const rate = document.getElementById(`rate-${cId}`)?.value || null;
+    const sdate = document.getElementById(`sdate-${cId}`)?.value || null;
+    if (existingIds.includes(cId)) toUpdate.push({ consultant_id:cId, billing_rate:rate, start_date:sdate });
+    else toInsert.push({ consultant_id:cId, billing_cycle_id:cycleId, billing_rate:rate, start_date:sdate });
+
+    // Save rate to consultant_client_rates
+    await sb.from('consultant_client_rates').upsert({ consultant_id:cId, client_id:clientId, billing_rate:rate }, { onConflict:'consultant_id,client_id' });
+  }
+  if (toInsert.length) await sb.from('consultant_billing_cycles').insert(toInsert);
+  for (const u of toUpdate) await sb.from('consultant_billing_cycles').update({ billing_rate:u.billing_rate, start_date:u.start_date }).eq('consultant_id',u.consultant_id).eq('billing_cycle_id',cycleId);
+
+  toast(`${checked.length} consultant(s) assigned`);
+  await fetchAssignments();
+  loadAssignments();
+}
+
+async function bulkUnassign() {
+  const cycleId = document.getElementById('asgn-cycle').value;
+  if (!cycleId) return;
+  const checked = [...document.querySelectorAll('.asgn-chk:checked')].map(c=>c.dataset.id);
+  if (checked.length===0) { toast('Select consultants to unassign','error'); return; }
+  if (!confirm(`Unassign ${checked.length} consultant(s) from this cycle?`)) return;
+  for (const cId of checked) {
+    await sb.from('consultant_billing_cycles').delete().eq('consultant_id',cId).eq('billing_cycle_id',cycleId);
+    await sb.from('invoices').delete().eq('consultant_id',cId).eq('billing_cycle_id',cycleId).eq('status','pending');
+  }
+  toast(`${checked.length} consultant(s) unassigned`);
+  await fetchAssignments();
+  loadAssignments();
+}
+
+// ============================================================
+//  SETTINGS
+// ============================================================
+async function loadSettings() {
+  const { data } = await sb.from('settings').select('*');
+  const map = {};
+  (data||[]).forEach(s => map[s.key] = s.value);
+  document.getElementById('notif-email').value = map['notification_email']||'';
+}
+
+async function saveSettings() {
+  const email = document.getElementById('notif-email').value;
+  await sb.from('settings').upsert({ key:'notification_email', value:email }, { onConflict:'key' });
+  toast('Settings saved');
+}
+
+// ============================================================
+//  EMAIL NOTIFICATION ON LOGIN
+// ============================================================
+async function checkPendingOnLogin() {
+  if (_pendingInvoices.length === 0) return;
+  const { data } = await sb.from('settings').select('value').eq('key','notification_email').single();
+  if (!data?.value) return;
+  // Call Supabase Edge Function if available, or show in-app alert
+  toast(`📧 ${_pendingInvoices.length} pending invoice(s) — notification email queued to ${data.value}`, 'success');
+  // To wire up real email: call your Supabase Edge Function here
+  // await sb.functions.invoke('send-pending-email', { body: { to: data.value, count: _pendingInvoices.length } });
+}
+
+// ============================================================
+//  FILTER DROPDOWNS POPULATION
+// ============================================================
+function populateFilterDropdowns() {
+  const clientSels = ['f-client','bc-client-filter'];
+  clientSels.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cur = el.value;
+    el.innerHTML = '<option value="">All Clients</option>' + _clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+    el.value = cur;
+  });
+  const cycSel = document.getElementById('f-cycle');
+  if (cycSel) { const cur=cycSel.value; cycSel.innerHTML='<option value="">All Cycles</option>'+_cycles.map(c=>`<option value="${c.id}">${c.start_date} → ${c.end_date}${c.label?' ('+c.label+')':''}</option>`).join(''); cycSel.value=cur; }
+}
+
+// ============================================================
+//  MODAL HELPERS
+// ============================================================
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+// ============================================================
+//  INIT
+// ============================================================
+initSupabase();
+
+// Check session on load
+window.addEventListener('load', async () => {
+  if (SUPABASE_URL === 'YOUR_SUPABASE_URL') return; // not configured yet
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    document.getElementById('user-email-display').textContent = session.user.email;
+    await onLoggedIn(session.user.email);
+  }
+});
+
+// Override loadAllData to also populate dropdowns
+const _origLoadAllData = loadAllData;
+async function loadAllData() {
+  await Promise.all([fetchConsultants(), fetchClients(), fetchCycles(), fetchAssignments()]);
+  await autoGeneratePending();
+  await fetchPendingInvoices();
+  populateFilterDropdowns();
+  loadDashboard();
+}
+</script>
+
+<!-- ============================================================
+     SUPABASE SCHEMA — Run this SQL in your Supabase SQL Editor
+     ============================================================
+
+CREATE TABLE consultants (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE clients (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  contact TEXT,
+  email TEXT,
+  phone TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE billing_cycles (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  cycle_type TEXT DEFAULT 'custom',
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  label TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE consultant_billing_cycles (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  consultant_id UUID REFERENCES consultants(id) ON DELETE CASCADE,
+  billing_cycle_id UUID REFERENCES billing_cycles(id) ON DELETE CASCADE,
+  billing_rate NUMERIC(10,2),
+  start_date DATE,
+  UNIQUE(consultant_id, billing_cycle_id)
+);
+
+CREATE TABLE consultant_client_rates (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  consultant_id UUID REFERENCES consultants(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  billing_rate NUMERIC(10,2),
+  UNIQUE(consultant_id, client_id)
+);
+
+CREATE TABLE invoices (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  consultant_id UUID REFERENCES consultants(id) ON DELETE CASCADE,
+  billing_cycle_id UUID REFERENCES billing_cycles(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  status TEXT DEFAULT 'pending',
+  billing_rate NUMERIC(10,2),
+  invoice_number TEXT,
+  invoice_date DATE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE settings (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
+
+-- Enable Row Level Security (recommended)
+ALTER TABLE consultants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE billing_cycles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE consultant_billing_cycles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE consultant_client_rates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
+
+-- Allow authenticated users full access (single-user app)
+CREATE POLICY "auth_all" ON consultants FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "auth_all" ON clients FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "auth_all" ON billing_cycles FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "auth_all" ON consultant_billing_cycles FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "auth_all" ON consultant_client_rates FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "auth_all" ON invoices FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "auth_all" ON settings FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-->
+</body>
+</html>
