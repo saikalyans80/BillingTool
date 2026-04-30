@@ -1192,8 +1192,6 @@ function getSelectedCycleIds() {
 
 function selectAllCycles(checked) {
   document.querySelectorAll('.cycle-chk').forEach(c => {
-    // When selecting all, skip ended cycles
-    if (checked && c.dataset.status === 'ended') return;
     c.checked = checked;
   });
 }
@@ -1232,12 +1230,14 @@ function renderCycleList(clientId, fromDate) {
     const status = c.end_date < today ? 'ended' : (c.start_date <= today ? 'active' : 'upcoming');
     const statusColor = status === 'ended' ? 'var(--warning)' : status === 'active' ? 'var(--success)' : 'var(--brand)';
     const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
-    // Auto-check: not ended AND start_date >= fromDate (if fromDate set)
-    const autoCheck = status !== 'ended' && (fromDate ? c.start_date >= fromDate : false);
-    // Dim ended cycles visually
-    const opacity = status === 'ended' ? 'opacity:0.5;' : '';
+    // Auto-check: if fromDate set, select cycles where start_date >= fromDate (cycle starts on/after that date)
+    // If no fromDate, select active and upcoming by default
+    const autoCheck = fromDate
+      ? c.start_date >= fromDate
+      : status !== 'ended';
+    const opacity = status === 'ended' ? 'opacity:0.55;' : '';
     return `<label style="display:flex; align-items:center; gap:8px; padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border); font-size:12px; ${opacity}" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background=''">
-      <input type="checkbox" class="cycle-chk" data-id="${c.id}" data-status="${status}" ${autoCheck ? 'checked' : ''} style="accent-color:var(--brand); width:14px; height:14px; flex-shrink:0;">
+      <input type="checkbox" class="cycle-chk" data-id="${c.id}" data-status="${status}" data-start="${c.start_date}" data-end="${c.end_date}" ${autoCheck ? 'checked' : ''} style="accent-color:var(--brand); width:14px; height:14px; flex-shrink:0;">
       <span style="flex:1;">
         <span class="mono" style="font-size:11px; color:var(--text-2);">${c.start_date} → ${c.end_date}</span>
         <span style="display:flex; gap:4px; align-items:center; margin-top:1px;">
@@ -1252,6 +1252,7 @@ function renderCycleList(clientId, fromDate) {
 async function loadAssignments() {
   const cycleIds = getSelectedCycleIds();
   const clientId = document.getElementById('asgn-client').value;
+  const fromDate = document.getElementById('asgn-from-date').value;
   const empty = document.getElementById('asgn-empty');
   const card = document.getElementById('asgn-card');
 
@@ -1264,11 +1265,11 @@ async function loadAssignments() {
   empty.style.display = 'none';
 
   // Summary label
-  const selectedCycleObjs = _cycles.filter(c => cycleIds.includes(c.id));
+  const selectedCycleObjs = _cycles.filter(c => cycleIds.includes(c.id)).sort((a,b)=>a.start_date.localeCompare(b.start_date));
   document.getElementById('asgn-cycle-summary').textContent =
     cycleIds.length === 1
       ? `Cycle: ${selectedCycleObjs[0]?.start_date} \u2192 ${selectedCycleObjs[0]?.end_date}`
-      : `${cycleIds.length} billing cycles selected`;
+      : `${cycleIds.length} billing cycles selected (${selectedCycleObjs[0]?.start_date} \u2192 ${selectedCycleObjs[selectedCycleObjs.length-1]?.end_date})`;
 
   // Fetch all assignments for selected cycles in one go
   const { data: cycleAssignments } = await sb.from('consultant_billing_cycles').select('*').in('billing_cycle_id', cycleIds);
@@ -1280,20 +1281,28 @@ async function loadAssignments() {
     const myAsgns = (cycleAssignments||[]).filter(a=>a.consultant_id===c.id);
     const assignedCount = myAsgns.length;
     const rate = myAsgns[0]?.billing_rate || (clientRates||[]).find(r=>r.consultant_id===c.id)?.billing_rate || '';
-    const sdate = myAsgns[0]?.start_date || '';
+
+    // Start date: only pre-fill if there's an existing assignment with a start_date. Otherwise leave blank.
+    const existingStart = myAsgns.length
+      ? myAsgns.map(a=>a.start_date).filter(Boolean).sort()[0] || ''
+      : '';
+    const defaultSdate = existingStart;
+
+    const existingEnd = myAsgns.length
+      ? myAsgns.map(a=>a.end_date).filter(Boolean).sort().reverse()[0] || ''
+      : '';
 
     let statusHtml;
     if (assignedCount === 0) statusHtml = '<span class="badge" style="background:var(--surface-3);color:var(--text-2);">Unassigned</span>';
     else if (assignedCount === cycleIds.length) statusHtml = '<span class="badge badge-active">All ' + cycleIds.length + ' cycle' + (cycleIds.length>1?'s':'') + '</span>';
     else statusHtml = '<span class="badge badge-pending">' + assignedCount + ' of ' + cycleIds.length + ' cycles</span>';
 
-    const edate = myAsgns[0]?.end_date || '';
     return `<tr id="asgn-row-${c.id}">
       <td><input type="checkbox" class="asgn-chk" data-id="${c.id}" ${assignedCount>0?'checked':''}></td>
       <td><strong>${c.name}</strong><br><span style="font-size:11px;color:var(--text-3);">${c.email||''}</span></td>
       <td><div style="display:flex;align-items:center;gap:6px;"><span style="color:var(--text-3);font-size:12px;">$</span><input type="number" id="rate-${c.id}" class="form-control" style="width:100px;" placeholder="0.00" step="0.01" value="${rate}"></div></td>
-      <td><input type="date" id="sdate-${c.id}" class="form-control" style="width:140px;" value="${sdate}"></td>
-      <td><input type="date" id="edate-${c.id}" class="form-control" style="width:140px;" value="${edate}"></td>
+      <td><input type="date" id="sdate-${c.id}" class="form-control" style="width:140px;" value="${defaultSdate}" title="Consultant start date for this assignment"></td>
+      <td><input type="date" id="edate-${c.id}" class="form-control" style="width:140px;" value="${existingEnd}" title="Consultant end date for this assignment"></td>
       <td>${statusHtml}</td>
     </tr>`;
   }).join('');
@@ -1311,24 +1320,60 @@ async function bulkAssign() {
   const checked = [...document.querySelectorAll('.asgn-chk:checked')].map(c=>c.dataset.id);
   if (checked.length === 0) { toast('Select at least one consultant', 'error'); return; }
 
-  for (const cycleId of cycleIds) {
-    const { data: existing } = await sb.from('consultant_billing_cycles').select('consultant_id').eq('billing_cycle_id', cycleId);
-    const existingIds = (existing||[]).map(e=>e.consultant_id);
+  // Pre-fetch existing assignments for all selected cycles at once
+  const { data: allExisting } = await sb.from('consultant_billing_cycles').select('consultant_id,billing_cycle_id').in('billing_cycle_id', cycleIds);
+  const existingSet = new Set((allExisting||[]).map(e=>`${e.consultant_id}__${e.billing_cycle_id}`));
+
+  // Sort selected cycles by start_date
+  const selectedCycleObjs = cycleIds.map(id => _cycles.find(c=>c.id===id)).filter(Boolean).sort((a,b)=>a.start_date.localeCompare(b.start_date));
+
+  let assignedCount = 0;
+
+  for (const cId of checked) {
+    const rate = document.getElementById(`rate-${cId}`)?.value || null;
+    const sdate = document.getElementById(`sdate-${cId}`)?.value || null;
+    const edate = document.getElementById(`edate-${cId}`)?.value || null;
+
+    // Determine which cycles this consultant actually applies to based on their start/end dates
+    // No sdate/edate = all selected cycles apply
+    const applicableCycles = selectedCycleObjs.filter(cycle => {
+      if (sdate && cycle.end_date < sdate) return false;  // cycle ended before consultant started
+      if (edate && cycle.start_date > edate) return false; // cycle starts after consultant ended
+      return true;
+    });
+
+    if (applicableCycles.length === 0) continue;
+
     const toInsert = [];
     const toUpdate = [];
-    for (const cId of checked) {
-      const rate = document.getElementById(`rate-${cId}`)?.value || null;
-      const sdate = document.getElementById(`sdate-${cId}`)?.value || null;
-      const edate = document.getElementById(`edate-${cId}`)?.value || null;
-      if (existingIds.includes(cId)) toUpdate.push({ consultant_id:cId, billing_cycle_id:cycleId, billing_rate:rate, start_date:sdate, end_date:edate });
-      else toInsert.push({ consultant_id:cId, billing_cycle_id:cycleId, billing_rate:rate, start_date:sdate, end_date:edate });
-      await sb.from('consultant_client_rates').upsert({ consultant_id:cId, client_id:clientId, billing_rate:rate }, { onConflict:'consultant_id,client_id' });
+
+    for (const cycle of applicableCycles) {
+      // Only store start_date on the first applicable cycle row, end_date on the last
+      const isFirst = cycle.id === applicableCycles[0].id;
+      const isLast  = cycle.id === applicableCycles[applicableCycles.length - 1].id;
+      const rowStart = (sdate && isFirst) ? sdate : null;
+      const rowEnd   = (edate && isLast)  ? edate : null;
+
+      const key = `${cId}__${cycle.id}`;
+      if (existingSet.has(key)) {
+        toUpdate.push({ consultant_id:cId, billing_cycle_id:cycle.id, billing_rate:rate, start_date:rowStart, end_date:rowEnd });
+      } else {
+        toInsert.push({ consultant_id:cId, billing_cycle_id:cycle.id, billing_rate:rate, start_date:rowStart, end_date:rowEnd });
+      }
     }
+
+    await sb.from('consultant_client_rates').upsert({ consultant_id:cId, client_id:clientId, billing_rate:rate }, { onConflict:'consultant_id,client_id' });
     if (toInsert.length) await sb.from('consultant_billing_cycles').insert(toInsert);
-    for (const u of toUpdate) await sb.from('consultant_billing_cycles').update({ billing_rate:u.billing_rate, start_date:u.start_date, end_date:u.end_date }).eq('consultant_id',u.consultant_id).eq('billing_cycle_id',u.billing_cycle_id);
+    for (const u of toUpdate) {
+      await sb.from('consultant_billing_cycles')
+        .update({ billing_rate:u.billing_rate, start_date:u.start_date, end_date:u.end_date })
+        .eq('consultant_id', u.consultant_id)
+        .eq('billing_cycle_id', u.billing_cycle_id);
+    }
+    assignedCount++;
   }
 
-  toast(`${checked.length} consultant(s) assigned to ${cycleIds.length} cycle(s)`);
+  toast(`${assignedCount} consultant(s) assigned across applicable billing cycles`);
   await fetchAssignments();
   loadAssignments();
 }
