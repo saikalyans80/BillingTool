@@ -1090,6 +1090,13 @@ async function unwrapSupabase(label, promise) {
   return { ok: true, data, error: null };
 }
 
+/** Same as unwrapSupabase but no toast (caller handles errors — e.g. batched writes). */
+async function unwrapSupabaseQuiet(promise) {
+  const { data, error } = await promise;
+  if (error) return { ok: false, data: null, error };
+  return { ok: true, data, error: null };
+}
+
 let _loadAllDataPromise = null;
 
 // ============================================================
@@ -2199,7 +2206,7 @@ function openCycleModal() {
 // ============================================================
 async function loadAssignmentDropdowns() {
   const sel = document.getElementById('asgn-client');
-  if (sel) sel.innerHTML = '<option value="">&#8212; Select Client &#8212;</option>' + _clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  if (sel) sel.innerHTML = '<option value="">&#8212; Select Client &#8212;</option>' + _clients.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
   document.getElementById('asgn-card').style.display = 'none';
   document.getElementById('asgn-empty').style.display = 'block';
 }
@@ -2238,14 +2245,10 @@ async function loadAssignments() {
   }
 
   const cycleIds = _currentAsgnCycles.map(c => c.id);
-  try {
-    const { data, error } = await sb.from('consultant_billing_cycles')
-      .select('*').in('billing_cycle_id', cycleIds);
-    if (error) throw error;
-    _currentAsgnData = data || [];
-  } catch(e) {
-    toast('Error loading assignments: ' + e.message, 'error'); return;
-  }
+  const { ok, data } = await unwrapSupabase('Load client assignments', sb.from('consultant_billing_cycles')
+    .select('*').in('billing_cycle_id', cycleIds));
+  if (!ok) return;
+  _currentAsgnData = data || [];
 
   const cli = _clients.find(c => c.id === clientId);
   const assignedConsIds = [...new Set(_currentAsgnData.map(a => a.consultant_id))];
@@ -2310,8 +2313,8 @@ function renderAssignmentTable() {
 
     return `<tr style="${rowOpacity}">
       <td>
-        <strong>${cons?.name || cid}</strong>
-        <br><span style="font-size:11px;color:var(--text-3);">${cons?.email || ''}</span>
+        <strong>${escapeHtml(cons?.name || cid)}</strong>
+        <br><span style="font-size:11px;color:var(--text-3);">${escapeHtml(cons?.email || '')}</span>
       </td>
       <td>${rateDisp}</td>
       <td>${startDisp}</td>
@@ -2367,7 +2370,7 @@ function openConsultantCyclesModal(consultantId) {
         style="accent-color:var(--brand);width:15px;height:15px;flex-shrink:0;">
       <span style="flex:1;">
         <span class="mono" style="font-size:12px;font-weight:600;">${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}</span>
-        ${c.label ? `<span style="color:var(--text-3);font-size:11px;margin-left:6px;">${c.label}</span>` : ''}
+        ${c.label ? `<span style="color:var(--text-3);font-size:11px;margin-left:6px;">${escapeHtml(c.label)}</span>` : ''}
         <span style="margin-left:6px;font-size:10px;font-weight:700;color:${statusColor};text-transform:uppercase;">${status}</span>
         ${disabled ? '<span style="font-size:10px;color:var(--warning);margin-left:6px;">⚠ after end date</span>' : ''}
       </span>
@@ -2412,16 +2415,18 @@ async function saveCycleAssignments() {
       start_date: startDate,
       end_date: endDate
     }));
-    const { error } = await sb.from('consultant_billing_cycles').insert(rows);
-    if (error) { toast('Error assigning cycles: ' + error.message, 'error'); return; }
+    const ins = await unwrapSupabase('Assign billing cycles', sb.from('consultant_billing_cycles').insert(rows));
+    if (!ins.ok) return;
   }
 
   // Unassign unchecked cycles
   for (const cycId of toUnassign) {
-    await sb.from('consultant_billing_cycles')
-      .delete().eq('consultant_id', consultantId).eq('billing_cycle_id', cycId);
-    await sb.from('invoices')
-      .delete().eq('consultant_id', consultantId).eq('billing_cycle_id', cycId).eq('status', 'pending');
+    const u1 = await unwrapSupabaseQuiet(sb.from('consultant_billing_cycles')
+      .delete().eq('consultant_id', consultantId).eq('billing_cycle_id', cycId));
+    if (!u1.ok) { toast('Unassign cycle: ' + u1.error.message, 'error'); return; }
+    const u2 = await unwrapSupabaseQuiet(sb.from('invoices')
+      .delete().eq('consultant_id', consultantId).eq('billing_cycle_id', cycId).eq('status', 'pending'));
+    if (!u2.ok) { toast('Remove pending invoice: ' + u2.error.message, 'error'); return; }
   }
 
   const changed = toAssign.length + toUnassign.length;
@@ -2487,30 +2492,33 @@ async function saveAssignment() {
     // ── START DATE: cycle ended before consultant started → DELETE record
     // (consultant was not with this client during that cycle)
     if (start && cyc && cyc.end_date < start) {
-      const { error: delErr } = await sb.from('consultant_billing_cycles')
-        .delete().eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id);
-      if (delErr) { updateErrors.push(delErr.message); continue; }
-      await sb.from('invoices')
-        .delete().eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id).eq('status','pending');
+      const del1 = await unwrapSupabaseQuiet(sb.from('consultant_billing_cycles')
+        .delete().eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id));
+      if (!del1.ok) { updateErrors.push(del1.error.message); continue; }
+      const del2 = await unwrapSupabaseQuiet(sb.from('invoices')
+        .delete().eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id).eq('status','pending'));
+      if (!del2.ok) { updateErrors.push(del2.error.message); continue; }
       removedCount++;
       continue;
     }
 
     // ── Update the record
-    const { error: updErr } = await sb.from('consultant_billing_cycles')
+    const upd = await unwrapSupabaseQuiet(sb.from('consultant_billing_cycles')
       .update({ billing_rate: rate, start_date: start, end_date: end })
-      .eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id);
-    if (updErr) { updateErrors.push(updErr.message); continue; }
+      .eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id));
+    if (!upd.ok) { updateErrors.push(upd.error.message); continue; }
 
     // ── END DATE: cycle starts after consultant's end → remove pending invoice only
     // (keep the record so consultant stays visible in Show Ended)
     if (end && cyc && cyc.start_date > end) {
-      await sb.from('invoices')
-        .delete().eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id).eq('status','pending');
+      const dInv = await unwrapSupabaseQuiet(sb.from('invoices')
+        .delete().eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id).eq('status','pending'));
+      if (!dInv.ok) updateErrors.push(dInv.error.message);
     } else if (rate !== null) {
-      await sb.from('invoices')
+      const uInv = await unwrapSupabaseQuiet(sb.from('invoices')
         .update({ billing_rate: rate })
-        .eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id).eq('status','pending');
+        .eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id).eq('status','pending'));
+      if (!uInv.ok) updateErrors.push(uInv.error.message);
     }
     updatedCount++;
   }
@@ -2537,8 +2545,8 @@ async function saveAssignment() {
         consultant_id, billing_cycle_id: c.id,
         billing_rate: rate, start_date: null, end_date: null
       }));
-      const { error: insErr } = await sb.from('consultant_billing_cycles').insert(rows);
-      if (insErr) updateErrors.push('Restore failed: ' + insErr.message);
+      const insR = await unwrapSupabaseQuiet(sb.from('consultant_billing_cycles').insert(rows));
+      if (!insR.ok) updateErrors.push('Restore failed: ' + insR.error.message);
       else restoredCount = missingCycles.length;
     }
   }
@@ -2572,10 +2580,12 @@ async function deleteAssignment() {
 
   const myAsgns = _currentAsgnData.filter(a => a.consultant_id === consultant_id);
   for (const a of myAsgns) {
-    await sb.from('consultant_billing_cycles')
-      .delete().eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id);
-    await sb.from('invoices')
-      .delete().eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id).eq('status','pending');
+    const d1 = await unwrapSupabaseQuiet(sb.from('consultant_billing_cycles')
+      .delete().eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id));
+    if (!d1.ok) { toast('Remove assignment: ' + d1.error.message, 'error'); return; }
+    const d2 = await unwrapSupabaseQuiet(sb.from('invoices')
+      .delete().eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id).eq('status','pending'));
+    if (!d2.ok) { toast('Remove pending invoice: ' + d2.error.message, 'error'); return; }
   }
   toast('All assignments removed for ' + cons);
   closeModal('edit-asgn-modal');
@@ -2646,8 +2656,8 @@ async function saveNewAssignment() {
     end_date: end || null
   }));
 
-  const { error } = await sb.from('consultant_billing_cycles').insert(rows);
-  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  const ins = await unwrapSupabase('Create assignment', sb.from('consultant_billing_cycles').insert(rows));
+  if (!ins.ok) return;
 
   const cons = _consultants.find(c => c.id === consultantId);
   toast(`${cons?.name || 'Consultant'} assigned to ${targetCycles.length} cycle(s)`);
@@ -2688,8 +2698,8 @@ async function saveBulkConsultants() {
   const parsed = parseBulkConsultants();
   if (parsed.length === 0) { toast('No valid entries. Enter at least one name.', 'error'); return; }
   const toInsert = parsed.map(c=>({ name:c.name, email:c.email||null, phone:c.phone||null }));
-  const { error } = await sb.from('consultants').insert(toInsert);
-  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  const ins = await unwrapSupabase('Bulk add consultants', sb.from('consultants').insert(toInsert));
+  if (!ins.ok) return;
   closeModal('bulk-consultant-modal');
   toast(`${parsed.length} consultant(s) added`);
   await loadAllData();
@@ -2751,8 +2761,8 @@ async function saveBulkCycles() {
   if (valid.length === 0) { toast('No valid cycle lines found', 'error'); return; }
   if (invalid.length > 0 && !confirm(`${invalid.length} invalid line(s) will be skipped. Add the ${valid.length} valid cycle(s)?`)) return;
   const toInsert = valid.map(c=>({ client_id: clientId, cycle_type: 'custom', start_date: c.start_date, end_date: c.end_date, label: label||null }));
-  const { error } = await sb.from('billing_cycles').insert(toInsert);
-  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  const ins = await unwrapSupabase('Bulk add billing cycles', sb.from('billing_cycles').insert(toInsert));
+  if (!ins.ok) return;
   // Auto-extend assignments to new cycles
   await autoExtendAssignmentsToNewCycles(clientId, toInsert.map(c => c.start_date));
   closeModal('bulk-cycle-modal');
@@ -2765,15 +2775,16 @@ async function saveBulkCycles() {
 //  SETTINGS
 // ============================================================
 async function loadSettings() {
-  const { data } = await sb.from('settings').select('*');
+  const { ok, data } = await unwrapSupabase('Load settings', sb.from('settings').select('*'));
   const map = {};
-  (data||[]).forEach(s => map[s.key] = s.value);
+  if (ok) (data||[]).forEach(s => map[s.key] = s.value);
   document.getElementById('notif-email').value = map['notification_email']||'';
 }
 
 async function saveSettings() {
   const email = document.getElementById('notif-email').value;
-  await sb.from('settings').upsert({ key:'notification_email', value:email }, { onConflict:'key' });
+  const { ok } = await unwrapSupabase('Save settings', sb.from('settings').upsert({ key:'notification_email', value:email }, { onConflict:'key' }));
+  if (!ok) return;
   toast('Settings saved');
 }
 
@@ -2782,8 +2793,8 @@ async function saveSettings() {
 // ============================================================
 async function checkPendingOnLogin() {
   if (_pendingInvoices.length === 0) return;
-  const { data } = await sb.from('settings').select('value').eq('key','notification_email').single();
-  if (!data?.value) return;
+  const { ok, data } = await unwrapSupabase('Load notification email', sb.from('settings').select('value').eq('key','notification_email').single());
+  if (!ok || !data?.value) return;
   // Call Supabase Edge Function if available, or show in-app alert
   toast(`📧 ${_pendingInvoices.length} pending invoice(s) — notification email queued to ${data.value}`, 'success');
   // To wire up real email: call your Supabase Edge Function here
