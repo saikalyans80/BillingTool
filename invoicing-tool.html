@@ -154,17 +154,19 @@
 </head>
 <body>
 
-<!-- CONFIG — paste your Supabase URL & anon key here -->
+<!-- Optional local overrides (copy config.local.example.js → config.local.js; gitignored) -->
+<script src="config.local.js"></script>
 <script>
-  const SUPABASE_URL = 'https://npkpfopaqpsbohywlhjf.supabase.co';
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wa3Bmb3BhcXBzYm9oeXdsaGpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0ODg1MzIsImV4cCI6MjA5MzA2NDUzMn0.Cq_drn7edTGpTnZ1WYBiXtuHUmQdNQwlkIi_AlhQ87A';
-  // ♥ Set this to your email — that account always gets admin role automatically
-  const ADMIN_EMAIL = 'admin@yourcompany.com';
+(function () {
+  if (typeof window.INVOICEFLOW_SUPABASE_URL === 'undefined') window.INVOICEFLOW_SUPABASE_URL = 'YOUR_SUPABASE_URL';
+  if (typeof window.INVOICEFLOW_SUPABASE_ANON_KEY === 'undefined') window.INVOICEFLOW_SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+  if (typeof window.INVOICEFLOW_ADMIN_EMAIL === 'undefined') window.INVOICEFLOW_ADMIN_EMAIL = 'admin@yourcompany.com';
+})();
 </script>
 
-<!-- Config Banner -->
-<div id="config-banner" class="show">
-  ⚠️ <strong>Setup required:</strong> Open this file and replace <code>YOUR_SUPABASE_URL</code> and <code>YOUR_SUPABASE_ANON_KEY</code> with your Supabase project credentials.
+<!-- Config Banner (shown when URL/key missing or still placeholders) -->
+<div id="config-banner">
+  ⚠️ <strong>Setup required:</strong> Copy <code>config.local.example.js</code> to <code>config.local.js</code> and set <code>INVOICEFLOW_SUPABASE_URL</code> and <code>INVOICEFLOW_SUPABASE_ANON_KEY</code>, or define those globals before this page loads.
 </div>
 
 <!-- Login Screen -->
@@ -1027,14 +1029,23 @@
 //  SUPABASE INIT
 // ============================================================
 let sb;
+function isConfigIncomplete() {
+  const u = (window.INVOICEFLOW_SUPABASE_URL || '').trim();
+  const k = (window.INVOICEFLOW_SUPABASE_ANON_KEY || '').trim();
+  if (!u || !k) return true;
+  if (u === 'YOUR_SUPABASE_URL' || k === 'YOUR_SUPABASE_ANON_KEY') return true;
+  if (u.startsWith('YOUR_') || k.startsWith('YOUR_')) return true;
+  return false;
+}
 function initSupabase() {
   try {
-    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
-      document.getElementById('config-banner').classList.add('show');
-    } else {
-      document.getElementById('config-banner').classList.remove('show');
+    const banner = document.getElementById('config-banner');
+    if (isConfigIncomplete()) {
+      if (banner) banner.classList.add('show');
+      return;
     }
+    if (banner) banner.classList.remove('show');
+    sb = supabase.createClient(window.INVOICEFLOW_SUPABASE_URL, window.INVOICEFLOW_SUPABASE_ANON_KEY);
   } catch(e) { console.error('Supabase init failed', e); }
 }
 
@@ -1048,6 +1059,38 @@ function toast(msg, type='success') {
   document.getElementById('toast').appendChild(el);
   setTimeout(() => el.remove(), 3500);
 }
+
+/** Safe text for HTML interpolation (names, labels, notes). */
+function escapeHtml(s) {
+  if (s == null || s === '') return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Only allow http(s) links for user-provided URLs (e.g. proof_url). */
+function safeHttpUrl(u) {
+  if (!u || typeof u !== 'string') return null;
+  const t = u.trim();
+  if (!/^https?:\/\//i.test(t)) return null;
+  return t;
+}
+
+/** Supabase calls: log, toast, return { ok, data, error }. */
+async function unwrapSupabase(label, promise) {
+  const { data, error } = await promise;
+  if (error) {
+    console.error('[InvoiceFlow]', label, error);
+    toast(label + ': ' + error.message, 'error');
+    return { ok: false, data: null, error };
+  }
+  return { ok: true, data, error: null };
+}
+
+let _loadAllDataPromise = null;
 
 // ============================================================
 //  DATE FORMAT HELPER  —  ISO → DD-MMM-YYYY
@@ -1067,6 +1110,7 @@ async function doLogin() {
   const email = document.getElementById('login-email').value;
   const pw = document.getElementById('login-password').value;
   document.getElementById('login-err').textContent = '';
+  if (!sb) { document.getElementById('login-err').textContent = 'Configure Supabase (config.local.js) first.'; return; }
   const { error } = await sb.auth.signInWithPassword({ email, password: pw });
   if (error) { document.getElementById('login-err').textContent = error.message; return; }
   onLoggedIn(email);
@@ -1076,6 +1120,7 @@ async function doSignup() {
   const email = document.getElementById('login-email').value;
   const pw = document.getElementById('login-password').value;
   if (!email || !pw) { document.getElementById('login-err').textContent = 'Enter email and password.'; return; }
+  if (!sb) { document.getElementById('login-err').textContent = 'Configure Supabase (config.local.js) first.'; return; }
   const { error } = await sb.auth.signUp({ email, password: pw });
   if (error) { document.getElementById('login-err').textContent = error.message; }
   else { document.getElementById('login-err').style.color = '#22c55e'; document.getElementById('login-err').textContent = 'Account created! Check email to confirm, then sign in.'; }
@@ -1124,49 +1169,73 @@ function showSection(id) {
 let _consultants = [], _clients = [], _cycles = [], _assignments = [], _pendingInvoices = [], _allPendingInvoices = [];
 
 async function loadAllData() {
-  await Promise.all([fetchConsultants(), fetchClients(), fetchCycles(), fetchAssignments()]);
-  await autoGeneratePending();
-  await fetchPendingInvoices();
-  loadDashboard();
+  if (_loadAllDataPromise) return _loadAllDataPromise;
+  _loadAllDataPromise = (async () => {
+    try {
+      await Promise.all([fetchConsultants(), fetchClients(), fetchCycles(), fetchAssignments()]);
+      await autoGeneratePending();
+      await fetchPendingInvoices();
+      populateFilterDropdowns();
+      populateTsDropdowns();
+      loadDashboard();
+    } finally {
+      _loadAllDataPromise = null;
+    }
+  })();
+  return _loadAllDataPromise;
 }
 
 async function fetchConsultants() {
-  const { data } = await sb.from('consultants').select('*').order('name');
-  _consultants = data || [];
+  const { ok, data } = await unwrapSupabase('Load consultants', sb.from('consultants').select('*').order('name'));
+  _consultants = ok ? (data || []) : [];
 }
 async function fetchClients() {
-  const { data } = await sb.from('clients').select('*').order('name');
-  _clients = data || [];
+  const { ok, data } = await unwrapSupabase('Load clients', sb.from('clients').select('*').order('name'));
+  _clients = ok ? (data || []) : [];
 }
 async function fetchCycles() {
-  const { data } = await sb.from('billing_cycles').select('*').order('start_date');
-  _cycles = data || [];
+  const { ok, data } = await unwrapSupabase('Load billing cycles', sb.from('billing_cycles').select('*').order('start_date'));
+  _cycles = ok ? (data || []) : [];
 }
 async function fetchAssignments() {
-  const { data } = await sb.from('consultant_billing_cycles').select('*');
-  _assignments = data || [];
+  const { ok, data } = await unwrapSupabase('Load assignments', sb.from('consultant_billing_cycles').select('*'));
+  _assignments = ok ? (data || []) : [];
 }
 async function fetchPendingInvoices() {
-  const { data } = await sb.from('invoices').select('*').eq('status','pending');
+  const { ok, data } = await unwrapSupabase('Load pending invoices', sb.from('invoices').select('*').eq('status','pending'));
+  const raw = ok ? (data || []) : [];
   const today = new Date().toISOString().split('T')[0];
-  _pendingInvoices = (data || []).filter(r => {
+  _pendingInvoices = raw.filter(r => {
     const cyc = _cycles.find(c => c.id === r.billing_cycle_id);
     return cyc && cyc.end_date < today;
   });
-  _allPendingInvoices = data || [];
+  _allPendingInvoices = raw;
   // Also refresh timesheets for coverage calculations
   await fetchTimesheets();
 }
 
 // ============================================================
-//  AUTO-GENERATE PENDING INVOICES
+//  AUTO-GENERATE PENDING INVOICES (RPC when deployed; client fallback)
 // ============================================================
 async function autoGeneratePending() {
+  const { error } = await sb.rpc('generate_pending_invoices');
+  if (!error) return;
+  const notFound = error.code === 'PGRST202' || (error.message && /does not exist|schema cache|function/i.test(error.message));
+  if (!notFound) {
+    toast('Generate pending invoices: ' + error.message, 'error');
+    return;
+  }
+  await autoGeneratePendingClient();
+}
+
+async function autoGeneratePendingClient() {
   const today = new Date().toISOString().split('T')[0];
-  const { data: existing } = await sb.from('invoices').select('consultant_id,billing_cycle_id').in('status',['pending','invoiced']);
+  const { ok, data: existing } = await unwrapSupabase('List existing invoices', sb.from('invoices').select('consultant_id,billing_cycle_id').in('status',['pending','invoiced']));
+  if (!ok) return;
   const existingSet = new Set((existing||[]).map(e => `${e.consultant_id}__${e.billing_cycle_id}`));
 
-  const { data: clientRatesAll } = await sb.from('consultant_client_rates').select('*');
+  const { ok: okRates, data: clientRatesAll } = await unwrapSupabase('Load consultant client rates', sb.from('consultant_client_rates').select('*'));
+  if (!okRates) return;
   const clientRatesMap = {};
   (clientRatesAll||[]).forEach(r => { clientRatesMap[`${r.consultant_id}__${r.client_id}`] = r.billing_rate; });
 
@@ -1194,7 +1263,10 @@ async function autoGeneratePending() {
       });
     }
   }
-  if (toInsert.length) await sb.from('invoices').insert(toInsert);
+  if (toInsert.length) {
+    const ins = await unwrapSupabase('Create pending invoices', sb.from('invoices').insert(toInsert));
+    if (!ins.ok) return;
+  }
 }
 
 // ============================================================
@@ -1226,9 +1298,9 @@ function loadDashboard() {
     const cli = _clients.find(c => c.id === inv.client_id);
     const cyc = _cycles.find(c => c.id === inv.billing_cycle_id);
     return `<tr>
-      <td><strong>${cons?.name || '—'}</strong></td>
-      <td>${cli?.name || '—'}</td>
-      <td>${cyc?.label || cycleLabel(cyc)}</td>
+      <td><strong>${escapeHtml(cons?.name || '—')}</strong></td>
+      <td>${escapeHtml(cli?.name || '—')}</td>
+      <td>${cyc?.label ? escapeHtml(cyc.label) : escapeHtml(cycleLabel(cyc))}</td>
       <td class="mono" style="font-size:12px;">${fmtDate(cyc?.start_date)} → ${fmtDate(cyc?.end_date)}</td>
       <td class="mono">$${inv.billing_rate || '—'}</td>
       <td><button class="btn btn-success btn-xs" onclick="openInvoiceModal('${inv.id}')">Mark Invoiced</button></td>
@@ -1240,7 +1312,8 @@ function loadDashboard() {
 //  PENDING INVOICES
 // ============================================================
 async function loadPending() {
-  const { data } = await sb.from('invoices').select('*').eq('status','pending');
+  const { ok, data } = await unwrapSupabase('Load pending invoices', sb.from('invoices').select('*').eq('status','pending'));
+  if (!ok) return;
   const today = new Date().toISOString().split('T')[0];
   // Only show invoices for cycles that have ended
   let rows = (data || []).filter(r => {
@@ -1263,7 +1336,8 @@ async function loadPending() {
   const tbody = document.getElementById('pending-body');
   if (rows.length === 0) { tbody.innerHTML = `<tr><td colspan="10" style="color:var(--text-3); text-align:center; padding:30px;">No pending invoices match filters</td></tr>`; return; }
   // Fetch all assignments once for end-date warning
-  const { data: asgnData } = await sb.from('consultant_billing_cycles').select('consultant_id,billing_cycle_id,end_date');
+  const { ok: okAsgn, data: asgnData } = await unwrapSupabase('Load assignment dates', sb.from('consultant_billing_cycles').select('consultant_id,billing_cycle_id,end_date'));
+  if (!okAsgn) return;
   tbody.innerHTML = rows.map(inv => {
     const cons = _consultants.find(c => c.id === inv.consultant_id);
     const cli = _clients.find(c => c.id === inv.client_id);
@@ -1285,9 +1359,9 @@ async function loadPending() {
     const endWarn = (asgn?.end_date && cyc?.end_date && asgn.end_date < cyc.end_date)
       ? `<div style="font-size:10px;color:var(--warning);margin-top:2px;">&#9888; Ends ${fmtDate(asgn.end_date)} (cycle ends ${fmtDate(cyc.end_date)})</div>` : '';
     return `<tr>
-      <td><strong>${cons?.name || '—'}</strong>${endWarn}</td>
-      <td>${cli?.name || '—'}</td>
-      <td>${cyc?.label || cycleLabel(cyc)}</td>
+      <td><strong>${escapeHtml(cons?.name || '—')}</strong>${endWarn}</td>
+      <td>${escapeHtml(cli?.name || '—')}</td>
+      <td>${cyc?.label ? escapeHtml(cyc.label) : escapeHtml(cycleLabel(cyc))}</td>
       <td class="mono" style="font-size:12px;">${fmtDate(cyc?.start_date)} &rarr; ${fmtDate(cyc?.end_date)}</td>
       <td class="mono">$${inv.billing_rate||'—'}/hr</td>
       <td><input type="number" value="${hours}" min="0" step="0.5" style="width:80px;" class="form-control" placeholder="0" onblur="saveInvoiceHours('${inv.id}', this.value, this)" oninput="updatePendingTotal(this, ${rate})"></td>
@@ -1325,7 +1399,8 @@ function updatePendingTotal(inputEl, rate) {
 
 async function saveInvoiceHours(invId, hoursVal, inputEl) {
   const h = hoursVal === '' ? null : parseFloat(hoursVal);
-  await sb.from('invoices').update({ hours: h }).eq('id', invId);
+  const { ok } = await unwrapSupabase('Save invoice hours', sb.from('invoices').update({ hours: h }).eq('id', invId));
+  if (!ok) return;
   // Refresh the total cell
   const row = inputEl ? inputEl.closest('tr') : null;
   const totalCell = row ? row.querySelector('[id^="total-"]') : null;
@@ -1340,7 +1415,8 @@ async function saveInvoiceHours(invId, hoursVal, inputEl) {
 //  INVOICED TAB
 // ============================================================
 async function loadInvoiced() {
-  const { data } = await sb.from('invoices').select('*').eq('status', 'invoiced').order('invoice_date', { ascending: false });
+  const { ok, data } = await unwrapSupabase('Load invoiced records', sb.from('invoices').select('*').eq('status', 'invoiced').order('invoice_date', { ascending: false }));
+  if (!ok) return;
   let rows = data || [];
 
   const clientFilter = document.getElementById('if-client').value;
@@ -1354,8 +1430,9 @@ async function loadInvoiced() {
   if (toFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.end_date <= toFilter; });
 
   // Update invoiced badge
-  const { data: allInvoiced } = await sb.from('invoices').select('id').eq('status', 'invoiced');
+  const { ok: okBadge, data: allInvoiced } = await unwrapSupabase('Load invoiced count', sb.from('invoices').select('id').eq('status', 'invoiced'));
   const ibadge = document.getElementById('invoiced-badge');
+  if (!okBadge) return;
   if (ibadge) { const cnt = (allInvoiced||[]).length; if (cnt > 0) { ibadge.textContent = cnt; ibadge.style.display = 'inline'; } else { ibadge.style.display = 'none'; } }
 
   const tbody = document.getElementById('invoiced-body');
@@ -1368,14 +1445,14 @@ async function loadInvoiced() {
     const hours = inv.hours != null ? inv.hours : '—';
     const total = (rate && inv.hours != null) ? '$' + (rate * inv.hours).toFixed(2) : '—';
     return `<tr>
-      <td><strong>${cons?.name || '—'}</strong></td>
-      <td>${cli?.name || '—'}</td>
-      <td>${cyc?.label || cycleLabel(cyc)}</td>
+      <td><strong>${escapeHtml(cons?.name || '—')}</strong></td>
+      <td>${escapeHtml(cli?.name || '—')}</td>
+      <td>${cyc?.label ? escapeHtml(cyc.label) : escapeHtml(cycleLabel(cyc))}</td>
       <td class="mono" style="font-size:12px;">${fmtDate(cyc?.start_date)} → ${fmtDate(cyc?.end_date)}</td>
       <td class="mono">$${inv.billing_rate||'—'}/hr</td>
       <td class="mono">${hours}</td>
       <td class="mono">${total}</td>
-      <td class="mono" style="font-size:12px;">${inv.invoice_number || '—'}</td>
+      <td class="mono" style="font-size:12px;">${escapeHtml(inv.invoice_number || '—')}</td>
       <td class="mono" style="font-size:12px;">${fmtDate(inv.invoice_date)}</td>
       <td style="display:flex; gap:5px; align-items:center;">
         <button class="btn btn-secondary btn-xs" title="Edit" onclick="openEditInvoicedModal('${inv.id}')" style="padding:4px 7px;">
@@ -1397,7 +1474,8 @@ function clearInvoicedFilters() {
 
 async function undoInvoice(invId) {
   if (!confirm('Undo this invoice? It will be moved back to Pending status.')) return;
-  await sb.from('invoices').update({ status: 'pending', invoice_number: null, invoice_date: null }).eq('id', invId);
+  const { ok } = await unwrapSupabase('Undo invoice', sb.from('invoices').update({ status: 'pending', invoice_number: null, invoice_date: null }).eq('id', invId));
+  if (!ok) return;
   toast('Invoice moved back to Pending.');
   await fetchPendingInvoices();
   loadDashboard();
@@ -1409,24 +1487,22 @@ async function undoInvoice(invId) {
 // ============================================================
 let _editInvoicedCache = null; // holds the full invoiced data array from last loadInvoiced call
 
-function openEditInvoicedModal(invId) {
-  // Find the invoice from the DOM data — re-fetch directly from Supabase
-  sb.from('invoices').select('*').eq('id', invId).single().then(({ data: inv }) => {
-    if (!inv) { toast('Could not load invoice', 'error'); return; }
-    const cons = _consultants.find(c => c.id === inv.consultant_id);
-    const cli  = _clients.find(c => c.id === inv.client_id);
-    const cyc  = _cycles.find(c => c.id === inv.billing_cycle_id);
+async function openEditInvoicedModal(invId) {
+  const { ok, data: inv } = await unwrapSupabase('Load invoice', sb.from('invoices').select('*').eq('id', invId).single());
+  if (!ok || !inv) { if (ok && !inv) toast('Could not load invoice', 'error'); return; }
+  const cons = _consultants.find(c => c.id === inv.consultant_id);
+  const cli  = _clients.find(c => c.id === inv.client_id);
+  const cyc  = _cycles.find(c => c.id === inv.billing_cycle_id);
 
-    document.getElementById('edit-inv-id').value       = inv.id;
-    document.getElementById('edit-inv-rate').value     = inv.billing_rate ?? '';
-    document.getElementById('edit-inv-hours').value    = inv.hours ?? '';
-    document.getElementById('edit-inv-number').value   = inv.invoice_number ?? '';
-    document.getElementById('edit-inv-date').value     = inv.invoice_date ?? '';
-    document.getElementById('edit-inv-info').textContent =
-      `${cons?.name || '—'}  ·  ${cli?.name || '—'}  ·  ${cyc ? cyc.start_date + ' → ' + cyc.end_date : '—'}`;
-    updateEditInvoicedTotal();
-    openModal('edit-invoiced-modal');
-  });
+  document.getElementById('edit-inv-id').value       = inv.id;
+  document.getElementById('edit-inv-rate').value     = inv.billing_rate ?? '';
+  document.getElementById('edit-inv-hours').value    = inv.hours ?? '';
+  document.getElementById('edit-inv-number').value   = inv.invoice_number ?? '';
+  document.getElementById('edit-inv-date').value     = inv.invoice_date ?? '';
+  document.getElementById('edit-inv-info').textContent =
+    `${cons?.name || '—'}  ·  ${cli?.name || '—'}  ·  ${cyc ? cyc.start_date + ' → ' + cyc.end_date : '—'}`;
+  updateEditInvoicedTotal();
+  openModal('edit-invoiced-modal');
 }
 
 function updateEditInvoicedTotal() {
@@ -2717,7 +2793,7 @@ initSupabase();
 
 // Check session on load
 window.addEventListener('load', async () => {
-  if (SUPABASE_URL === 'YOUR_SUPABASE_URL') return; // not configured yet
+  if (isConfigIncomplete() || !sb) return;
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
     document.getElementById('user-email-display').textContent = session.user.email;
@@ -2725,25 +2801,14 @@ window.addEventListener('load', async () => {
   }
 });
 
-// Override loadAllData to also populate dropdowns
-const _origLoadAllData = loadAllData;
-async function loadAllData() {
-  await Promise.all([fetchConsultants(), fetchClients(), fetchCycles(), fetchAssignments()]);
-  await autoGeneratePending();
-  await fetchPendingInvoices();
-  populateFilterDropdowns();
-  populateTsDropdowns();
-  loadDashboard();
-}
-
 // ============================================================
 //  TIMESHEET MODULE
 // ============================================================
 let _timesheets = [];
 
 async function fetchTimesheets() {
-  const { data } = await sb.from('timesheets').select('*').order('week_ending', { ascending: false });
-  _timesheets = data || [];
+  const { ok, data } = await unwrapSupabase('Load timesheets', sb.from('timesheets').select('*').order('week_ending', { ascending: false }));
+  _timesheets = ok ? (data || []) : [];
 }
 
 // Snap any date to the nearest upcoming Friday (or same day if Friday)
