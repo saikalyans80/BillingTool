@@ -1489,7 +1489,8 @@ let _editInvoicedCache = null; // holds the full invoiced data array from last l
 
 async function openEditInvoicedModal(invId) {
   const { ok, data: inv } = await unwrapSupabase('Load invoice', sb.from('invoices').select('*').eq('id', invId).single());
-  if (!ok || !inv) { if (ok && !inv) toast('Could not load invoice', 'error'); return; }
+  if (!ok) return;
+  if (!inv) { toast('Could not load invoice', 'error'); return; }
   const cons = _consultants.find(c => c.id === inv.consultant_id);
   const cli  = _clients.find(c => c.id === inv.client_id);
   const cyc  = _cycles.find(c => c.id === inv.billing_cycle_id);
@@ -1527,11 +1528,10 @@ async function saveEditInvoiced() {
   const number = document.getElementById('edit-inv-number').value.trim() || null;
   const date   = document.getElementById('edit-inv-date').value || null;
 
-  const { error } = await sb.from('invoices')
+  const { ok } = await unwrapSupabase('Save invoice', sb.from('invoices')
     .update({ billing_rate: rate, hours, invoice_number: number, invoice_date: date })
-    .eq('id', id);
-
-  if (error) { toast('Error saving: ' + error.message, 'error'); return; }
+    .eq('id', id));
+  if (!ok) return;
   toast('Invoice updated successfully!');
   closeModal('edit-invoiced-modal');
   loadInvoiced();
@@ -1542,7 +1542,8 @@ async function saveEditInvoiced() {
 // ============================================================
 async function exportInvoicedCSV() {
   // Fetch invoiced rows respecting current filters
-  const { data } = await sb.from('invoices').select('*').eq('status', 'invoiced').order('invoice_date', { ascending: false });
+  const { ok, data } = await unwrapSupabase('Load invoiced for export', sb.from('invoices').select('*').eq('status', 'invoiced').order('invoice_date', { ascending: false }));
+  if (!ok) return;
   let rows = data || [];
 
   const clientFilter = document.getElementById('if-client').value;
