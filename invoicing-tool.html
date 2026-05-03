@@ -96,14 +96,17 @@
     .form-control:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(26,86,219,0.1); }
     select.form-control { cursor: pointer; }
 
-    /* Modal */
-    .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.5); z-index: 100; display: none; align-items: center; justify-content: center; }
+    /* Modal — stay within viewport; scroll body when content is tall */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.5); z-index: 100; display: none; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; overflow-y: auto; -webkit-overflow-scrolling: touch; }
     .modal-overlay.open { display: flex; }
-    .modal { background: var(--surface); border-radius: 10px; width: 100%; max-width: 520px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
-    .modal-header { padding: 18px 22px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-    .modal-body { padding: 22px; }
-    .modal-footer { padding: 16px 22px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+    .modal { background: var(--surface); border-radius: 10px; width: 100%; max-width: 520px; max-height: min(calc(100vh - 32px), 92vh); box-shadow: 0 20px 60px rgba(0,0,0,0.2); display: flex; flex-direction: column; overflow: hidden; margin: auto; }
+    .modal-header { flex-shrink: 0; padding: 18px 22px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 22px; overflow-wrap: anywhere; word-break: break-word; }
+    .modal-footer { flex-shrink: 0; padding: 16px 22px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
     .modal-close { background: none; border: none; color: var(--text-3); cursor: pointer; font-size: 20px; line-height: 1; }
+
+    /* Bulk add/delete long preview lists */
+    .bulk-preview-box { max-height: min(42vh, 300px); overflow-y: auto; overflow-x: hidden; padding-right: 6px; margin-top: 8px; font-size: 12px; color: var(--text-2); }
 
     /* Login */
     #login-screen { position: fixed; inset: 0; background: #0f172a; display: flex; align-items: center; justify-content: center; z-index: 200; }
@@ -382,6 +385,7 @@
             <span style="font-weight:600;">Consultants</span>
             <div style="display:flex;gap:8px;">
               <button class="btn btn-secondary btn-sm" onclick="openBulkConsultantModal()">+ Bulk Add</button>
+              <button class="btn btn-danger btn-sm" onclick="openBulkDeleteConsultantModal()">Bulk delete</button>
               <button class="btn btn-primary btn-sm" onclick="openConsultantModal()">+ Add Consultant</button>
             </div>
           </div>
@@ -661,7 +665,7 @@
 
 <!-- Bulk Consultant Modal -->
 <div class="modal-overlay" id="bulk-consultant-modal">
-  <div class="modal" style="max-width:540px;">
+  <div class="modal" style="max-width:640px;">
     <div class="modal-header"><h3 style="font-size:15px; font-weight:600; margin:0;">Bulk Add Consultants</h3><button class="modal-close" onclick="closeModal('bulk-consultant-modal')">×</button></div>
     <div class="modal-body">
       <p style="font-size:12px; color:var(--text-2); margin-bottom:12px;">Paste one consultant per line. Fields are separated by <strong>semicolons</strong> (so names may include commas). Format: <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px;">Name; Email; Phone</code> (email and phone optional)</p>
@@ -669,12 +673,32 @@
         <label class="form-label">Consultants (one per line)</label>
         <textarea id="bulk-cons-input" class="form-control" rows="10" placeholder="Smith, John; john@example.com; +1 555 0001&#10;Jane Doe; jane@example.com&#10;Bob Johnson"></textarea>
       </div>
-      <div id="bulk-cons-preview" style="margin-top:8px; font-size:12px; color:var(--text-2);"></div>
+      <div id="bulk-cons-preview" class="bulk-preview-box"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('bulk-consultant-modal')">Cancel</button>
       <button class="btn btn-secondary" onclick="previewBulkConsultants()">Preview</button>
-      <button class="btn btn-primary" onclick="saveBulkConsultants()">Add All</button>
+      <button class="btn btn-primary" onclick="saveBulkConsultants()">Import selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Delete Consultants Modal -->
+<div class="modal-overlay" id="bulk-del-consultant-modal">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header"><h3 style="font-size:15px; font-weight:600; margin:0;">Bulk delete consultants</h3><button class="modal-close" onclick="closeModal('bulk-del-consultant-modal')">×</button></div>
+    <div class="modal-body">
+      <p style="font-size:12px; color:var(--text-2); margin-bottom:12px;">Paste one entry per line. Use the <strong>same format as bulk add</strong>: name first, fields separated by <strong>semicolons</strong> (only the name is used to find a consultant; match is case-insensitive). Then click <strong>Preview</strong>, uncheck anyone you want to <strong>keep</strong>, and click <strong>Delete selected</strong>.</p>
+      <div class="form-group">
+        <label class="form-label">Names to remove (one per line)</label>
+        <textarea id="bulk-del-cons-input" class="form-control" rows="10" placeholder="Smith, John; john@example.com&#10;Jane Doe" oninput="document.getElementById('bulk-del-cons-preview').innerHTML=''"></textarea>
+      </div>
+      <div id="bulk-del-cons-preview" class="bulk-preview-box"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('bulk-del-consultant-modal')">Cancel</button>
+      <button class="btn btn-secondary" onclick="previewBulkDeleteConsultants()">Preview</button>
+      <button class="btn btn-danger" onclick="saveBulkDeleteConsultants()">Delete selected</button>
     </div>
   </div>
 </div>
@@ -701,7 +725,7 @@
         <textarea id="bulk-cyc-input" class="form-control" rows="10"
           placeholder="2025-01-01, 2025-01-31&#10;2025-02-01, 2025-02-28&#10;2025-03-01, 2025-03-31"></textarea>
       </div>
-      <div id="bulk-cyc-preview" style="font-size:12px; color:var(--text-2); margin-top:6px;"></div>
+      <div id="bulk-cyc-preview" class="bulk-preview-box" style="margin-top:6px;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('bulk-cycle-modal')">Cancel</button>
@@ -1958,14 +1982,19 @@ async function saveConsultant() {
   loadConsultants();
 }
 
+/** Delete one consultant and related invoices/assignments. Returns true on full success. */
+async function deleteConsultantCore(id) {
+  const x1 = await unwrapSupabase('Delete consultant invoices', sb.from('invoices').delete().eq('consultant_id', id));
+  if (!x1.ok) return false;
+  const x2 = await unwrapSupabase('Delete consultant assignments', sb.from('consultant_billing_cycles').delete().eq('consultant_id', id));
+  if (!x2.ok) return false;
+  const x3 = await unwrapSupabase('Delete consultant', sb.from('consultants').delete().eq('id', id));
+  return x3.ok;
+}
+
 async function deleteConsultant(id) {
   if (!confirm('Delete this consultant? All assignments and invoices will also be removed.')) return;
-  const x1 = await unwrapSupabase('Delete consultant invoices', sb.from('invoices').delete().eq('consultant_id',id));
-  if (!x1.ok) return;
-  const x2 = await unwrapSupabase('Delete consultant assignments', sb.from('consultant_billing_cycles').delete().eq('consultant_id',id));
-  if (!x2.ok) return;
-  const x3 = await unwrapSupabase('Delete consultant', sb.from('consultants').delete().eq('id',id));
-  if (!x3.ok) return;
+  if (!(await deleteConsultantCore(id))) return;
   toast('Consultant deleted');
   await loadAllData();
   loadConsultants();
@@ -2696,22 +2725,123 @@ function parseBulkConsultants() {
   }).filter(c=>c.name);
 }
 
+function bulkConsultantNameExists(name) {
+  const n = (name || '').trim().toLowerCase();
+  if (!n) return false;
+  return _consultants.some(c => (c.name || '').trim().toLowerCase() === n);
+}
+
 function previewBulkConsultants() {
   const parsed = parseBulkConsultants();
-  if (parsed.length === 0) { document.getElementById('bulk-cons-preview').innerHTML = '<span style="color:var(--danger);">No valid entries found.</span>'; return; }
-  document.getElementById('bulk-cons-preview').innerHTML =
-    `<div style="color:var(--success); font-weight:600; margin-bottom:6px;">✓ ${parsed.length} consultant(s) ready to add:</div>` +
-    parsed.map((c,i)=>`<div style="padding:3px 0; border-bottom:1px solid var(--border);">${i+1}. <strong>${escapeHtml(c.name)}</strong>${c.email?' &mdash; '+escapeHtml(c.email):''}${c.phone?' &mdash; '+escapeHtml(c.phone):''}</div>`).join('');
+  const el = document.getElementById('bulk-cons-preview');
+  if (parsed.length === 0) { el.innerHTML = '<span style="color:var(--danger);">No valid entries found.</span>'; return; }
+  const dupRows = parsed.filter(c => bulkConsultantNameExists(c.name));
+  let warn = '';
+  if (dupRows.length > 0) {
+    warn = `<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#92400e;line-height:1.45;">
+      <strong>${dupRows.length} name(s)</strong> already match a consultant in your list (same name, ignoring upper/lower case). Those rows are <strong>unchecked</strong> by default so they are not imported—tick a row only if you still want to add it (e.g. a different person with the same name). <strong>Unchecked rows are never added.</strong>
+    </div>`;
+  }
+  const rows = parsed.map((c, i) => {
+    const dup = bulkConsultantNameExists(c.name);
+    const checkedAttr = dup ? '' : ' checked';
+    return `<label style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;">
+      <input type="checkbox" class="bulk-cons-chk" data-idx="${i}"${checkedAttr} style="margin-top:3px;accent-color:var(--brand);flex-shrink:0;width:16px;height:16px;">
+      <span style="flex:1;font-size:12px;line-height:1.4;">
+        <span style="color:var(--text-3);margin-right:6px;">${i + 1}.</span>
+        <strong>${escapeHtml(c.name)}</strong>${c.email ? ' &mdash; ' + escapeHtml(c.email) : ''}${c.phone ? ' &mdash; ' + escapeHtml(c.phone) : ''}
+        ${dup ? '<span class="badge" style="margin-left:8px;background:#fde68a;color:#92400e;border:1px solid #fcd34d;font-size:10px;">Already exists</span>' : ''}
+      </span>
+    </label>`;
+  }).join('');
+  el.innerHTML = warn +
+    `<div style="color:var(--success);font-weight:600;margin-bottom:8px;font-size:12px;">${parsed.length} row(s) — tick who to import:</div>` +
+    rows;
 }
 
 async function saveBulkConsultants() {
   const parsed = parseBulkConsultants();
   if (parsed.length === 0) { toast('No valid entries. Enter at least one name.', 'error'); return; }
-  const toInsert = parsed.map(c=>({ name:c.name, email:c.email||null, phone:c.phone||null }));
+  const checks = [...document.querySelectorAll('#bulk-cons-preview .bulk-cons-chk')];
+  if (checks.length !== parsed.length) {
+    toast('Click Preview first, then use the checkboxes to choose who to import.', 'error');
+    return;
+  }
+  const selectedIdx = new Set(
+    checks.filter(cb => cb.checked).map(cb => parseInt(cb.getAttribute('data-idx'), 10))
+  );
+  const selected = parsed.filter((_, i) => selectedIdx.has(i));
+  if (selected.length === 0) { toast('Select at least one row to import (check the box next to a name).', 'error'); return; }
+  const toInsert = selected.map(c => ({ name: c.name, email: c.email || null, phone: c.phone || null }));
   const ins = await unwrapSupabase('Bulk add consultants', sb.from('consultants').insert(toInsert));
   if (!ins.ok) return;
   closeModal('bulk-consultant-modal');
-  toast(`${parsed.length} consultant(s) added`);
+  toast(`${selected.length} consultant(s) added`);
+  await loadAllData();
+  loadConsultants();
+}
+
+// ============================================================
+//  BULK DELETE CONSULTANTS
+// ============================================================
+function openBulkDeleteConsultantModal() {
+  document.getElementById('bulk-del-cons-input').value = '';
+  document.getElementById('bulk-del-cons-preview').innerHTML = '';
+  openModal('bulk-del-consultant-modal');
+}
+
+function parseBulkDeleteConsultantLines() {
+  const lines = document.getElementById('bulk-del-cons-input').value.split('\n').map(l => l.trim()).filter(Boolean);
+  return lines.map(line => {
+    const nameKey = (line.split(';').map(p => p.trim())[0] || '').trim();
+    return { line, nameKey };
+  }).filter(r => r.nameKey);
+}
+
+async function previewBulkDeleteConsultants() {
+  await fetchConsultants();
+  const parsed = parseBulkDeleteConsultantLines();
+  const el = document.getElementById('bulk-del-cons-preview');
+  if (parsed.length === 0) { el.innerHTML = '<span style="color:var(--danger);">No lines to match. Enter at least one name (first field before <code>;</code>).</span>'; return; }
+  const nrm = s => (s || '').trim().toLowerCase();
+  let html = `<div style="color:var(--text-2);font-weight:600;margin-bottom:8px;font-size:12px;">${parsed.length} line(s) — <strong>unchecked</strong> consultants will not be deleted:</div>`;
+  parsed.forEach((row, i) => {
+    const matches = _consultants.filter(c => nrm(c.name) === nrm(row.nameKey));
+    html += `<div style="border-bottom:1px solid var(--border);padding:10px 0;">`;
+    html += `<div style="font-size:11px;color:var(--text-3);margin-bottom:4px;">Line ${i + 1}: <span class="mono">${escapeHtml(row.line)}</span></div>`;
+    if (matches.length === 0) {
+      html += `<div style="font-size:12px;color:var(--warning);">No consultant found with this name.</div>`;
+    } else {
+      matches.forEach(m => {
+        html += `<label style="display:flex;gap:10px;align-items:flex-start;margin-top:6px;cursor:pointer;">`;
+        html += `<input type="checkbox" class="bulk-del-chk" data-id="${m.id}" checked style="margin-top:3px;accent-color:var(--brand);flex-shrink:0;width:16px;height:16px;">`;
+        html += `<span style="flex:1;font-size:12px;"><strong>${escapeHtml(m.name)}</strong>`;
+        if (m.email) html += ` &mdash; ${escapeHtml(m.email)}`;
+        if (m.phone) html += ` &mdash; ${escapeHtml(m.phone)}`;
+        html += `</span></label>`;
+      });
+    }
+    html += `</div>`;
+  });
+  el.innerHTML = html;
+}
+
+async function saveBulkDeleteConsultants() {
+  const parsed = parseBulkDeleteConsultantLines();
+  if (parsed.length === 0) { toast('Enter at least one name to match.', 'error'); return; }
+  const boxes = [...document.querySelectorAll('#bulk-del-cons-preview .bulk-del-chk')];
+  if (boxes.length === 0) {
+    toast('Click Preview first. No matching consultants were found to delete.', 'error');
+    return;
+  }
+  const ids = [...new Set(boxes.filter(cb => cb.checked).map(cb => cb.getAttribute('data-id')))];
+  if (ids.length === 0) { toast('Select at least one consultant (check the box) to delete.', 'error'); return; }
+  if (!confirm(`Delete ${ids.length} consultant(s)? All assignments and invoices for each will be removed. This cannot be undone.`)) return;
+  for (const id of ids) {
+    if (!(await deleteConsultantCore(id))) return;
+  }
+  closeModal('bulk-del-consultant-modal');
+  toast(`${ids.length} consultant(s) deleted`);
   await loadAllData();
   loadConsultants();
 }
