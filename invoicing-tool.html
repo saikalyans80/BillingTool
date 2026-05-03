@@ -154,7 +154,8 @@
 </head>
 <body>
 
-<!-- Optional: add <script src="config.local.js"></script> here after copying config.local.example.js (gitignored). -->
+<!-- Supabase credentials: edit config.local.js (same folder as this HTML), then refresh. -->
+<script src="config.local.js"></script>
 <script>
 (function () {
   if (typeof window.INVOICEFLOW_SUPABASE_URL === 'undefined') window.INVOICEFLOW_SUPABASE_URL = 'YOUR_SUPABASE_URL';
@@ -165,7 +166,7 @@
 
 <!-- Config Banner (shown when URL/key missing or still placeholders) -->
 <div id="config-banner">
-  ⚠️ <strong>Setup required:</strong> Set <code>INVOICEFLOW_SUPABASE_URL</code> and <code>INVOICEFLOW_SUPABASE_ANON_KEY</code> in the script block above, or copy <code>config.local.example.js</code> to <code>config.local.js</code>, add <code>&lt;script src="config.local.js"&gt;&lt;/script&gt;</code> before the inline script, and fill in real values (see example file).
+  ⚠️ <strong>Setup required:</strong> Open <code>config.local.js</code> next to this HTML file and set your real <code>INVOICEFLOW_SUPABASE_URL</code> and <code>INVOICEFLOW_SUPABASE_ANON_KEY</code> (Supabase Dashboard → Project Settings → API), then refresh. See <code>config.local.example.js</code> for the shape of the file.
 </div>
 
 <!-- Login Screen -->
@@ -1116,7 +1117,11 @@ async function doLogin() {
   const email = document.getElementById('login-email').value;
   const pw = document.getElementById('login-password').value;
   document.getElementById('login-err').textContent = '';
-  if (!sb) { document.getElementById('login-err').textContent = 'Configure Supabase (config.local.js) first.'; return; }
+  if (!sb) {
+    document.getElementById('login-err').textContent =
+      'Supabase is not configured. Edit config.local.js in the same folder as this page (set URL + anon key from your Supabase project), save, and refresh.';
+    return;
+  }
   const { error } = await sb.auth.signInWithPassword({ email, password: pw });
   if (error) { document.getElementById('login-err').textContent = error.message; return; }
   onLoggedIn(email);
@@ -1126,7 +1131,11 @@ async function doSignup() {
   const email = document.getElementById('login-email').value;
   const pw = document.getElementById('login-password').value;
   if (!email || !pw) { document.getElementById('login-err').textContent = 'Enter email and password.'; return; }
-  if (!sb) { document.getElementById('login-err').textContent = 'Configure Supabase (config.local.js) first.'; return; }
+  if (!sb) {
+    document.getElementById('login-err').textContent =
+      'Supabase is not configured. Edit config.local.js in the same folder as this page (set URL + anon key from your Supabase project), save, and refresh.';
+    return;
+  }
   const { error } = await sb.auth.signUp({ email, password: pw });
   if (error) { document.getElementById('login-err').textContent = error.message; }
   else { document.getElementById('login-err').style.color = '#22c55e'; document.getElementById('login-err').textContent = 'Account created! Check email to confirm, then sign in.'; }
