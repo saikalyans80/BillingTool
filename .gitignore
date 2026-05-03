@@ -1,5 +1,4 @@
 node_modules/
 dist/
 .playwright/
-config.local.js
 *.log
