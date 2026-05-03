@@ -154,8 +154,7 @@
 </head>
 <body>
 
-<!-- Optional local overrides (copy config.local.example.js → config.local.js; gitignored) -->
-<script src="config.local.js"></script>
+<!-- Optional: add <script src="config.local.js"></script> here after copying config.local.example.js (gitignored). -->
 <script>
 (function () {
   if (typeof window.INVOICEFLOW_SUPABASE_URL === 'undefined') window.INVOICEFLOW_SUPABASE_URL = 'YOUR_SUPABASE_URL';
@@ -166,7 +165,7 @@
 
 <!-- Config Banner (shown when URL/key missing or still placeholders) -->
 <div id="config-banner">
-  ⚠️ <strong>Setup required:</strong> Copy <code>config.local.example.js</code> to <code>config.local.js</code> and set <code>INVOICEFLOW_SUPABASE_URL</code> and <code>INVOICEFLOW_SUPABASE_ANON_KEY</code>, or define those globals before this page loads.
+  ⚠️ <strong>Setup required:</strong> Set <code>INVOICEFLOW_SUPABASE_URL</code> and <code>INVOICEFLOW_SUPABASE_ANON_KEY</code> in the script block above, or copy <code>config.local.example.js</code> to <code>config.local.js</code>, add <code>&lt;script src="config.local.js"&gt;&lt;/script&gt;</code> before the inline script, and fill in real values (see example file).
 </div>
 
 <!-- Login Screen -->
@@ -1225,6 +1224,7 @@ async function fetchPendingInvoices() {
 //  AUTO-GENERATE PENDING INVOICES (RPC when deployed; client fallback)
 // ============================================================
 async function autoGeneratePending() {
+  if (!sb) return;
   const { error } = await sb.rpc('generate_pending_invoices');
   if (!error) return;
   const notFound = error.code === 'PGRST202' || (error.message && /does not exist|schema cache|function/i.test(error.message));
@@ -1439,8 +1439,10 @@ async function loadInvoiced() {
   // Update invoiced badge
   const { ok: okBadge, data: allInvoiced } = await unwrapSupabase('Load invoiced count', sb.from('invoices').select('id').eq('status', 'invoiced'));
   const ibadge = document.getElementById('invoiced-badge');
-  if (!okBadge) return;
-  if (ibadge) { const cnt = (allInvoiced||[]).length; if (cnt > 0) { ibadge.textContent = cnt; ibadge.style.display = 'inline'; } else { ibadge.style.display = 'none'; } }
+  if (ibadge && okBadge) {
+    const cnt = (allInvoiced||[]).length;
+    if (cnt > 0) { ibadge.textContent = cnt; ibadge.style.display = 'inline'; } else { ibadge.style.display = 'none'; }
+  }
 
   const tbody = document.getElementById('invoiced-body');
   if (rows.length === 0) { tbody.innerHTML = `<tr><td colspan="10" style="color:var(--text-3); text-align:center; padding:30px;">No invoiced records match filters</td></tr>`; return; }
@@ -2191,7 +2193,7 @@ async function deleteCycle(id) {
 }
 
 function openCycleModal() {
-  document.getElementById('cyc-client').innerHTML = '<option value="">— Select Client —</option>' + _clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  document.getElementById('cyc-client').innerHTML = '<option value="">— Select Client —</option>' + _clients.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
   document.getElementById('cyc-type').value = 'custom';
   document.getElementById('cyc-start').value = '';
   document.getElementById('cyc-end').value = '';
@@ -2615,7 +2617,7 @@ function openNewAsgnModal() {
   sel.innerHTML = '<option value="">&#8212; Select Consultant &#8212;</option>' +
     _consultants
       .filter(c => !assignedIds.has(c.id))
-      .map(c => `<option value="${c.id}">${c.name}${c.email ? ' — ' + c.email : ''}</option>`)
+      .map(c => `<option value="${c.id}">${escapeHtml(c.name)}${c.email ? ' — ' + escapeHtml(c.email) : ''}</option>`)
       .join('');
 
   document.getElementById('na-subtitle').textContent = `Client: ${cli?.name || ''} · ${_currentAsgnCycles.length} cycle(s)`;
@@ -2691,7 +2693,7 @@ function previewBulkConsultants() {
   if (parsed.length === 0) { document.getElementById('bulk-cons-preview').innerHTML = '<span style="color:var(--danger);">No valid entries found.</span>'; return; }
   document.getElementById('bulk-cons-preview').innerHTML =
     `<div style="color:var(--success); font-weight:600; margin-bottom:6px;">✓ ${parsed.length} consultant(s) ready to add:</div>` +
-    parsed.map((c,i)=>`<div style="padding:3px 0; border-bottom:1px solid var(--border);">${i+1}. <strong>${c.name}</strong>${c.email?' &mdash; '+c.email:''}${c.phone?' &mdash; '+c.phone:''}</div>`).join('');
+    parsed.map((c,i)=>`<div style="padding:3px 0; border-bottom:1px solid var(--border);">${i+1}. <strong>${escapeHtml(c.name)}</strong>${c.email?' &mdash; '+escapeHtml(c.email):''}${c.phone?' &mdash; '+escapeHtml(c.phone):''}</div>`).join('');
 }
 
 async function saveBulkConsultants() {
@@ -2712,7 +2714,7 @@ async function saveBulkConsultants() {
 function openBulkCycleModal() {
   document.getElementById('bulk-cyc-client').innerHTML =
     '<option value="">— Select Client —</option>' +
-    _clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+    _clients.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
   document.getElementById('bulk-cyc-input').value = '';
   document.getElementById('bulk-cyc-label').value = '';
   document.getElementById('bulk-cyc-preview').innerHTML = '';
@@ -2746,7 +2748,7 @@ function previewBulkCycles() {
   }
   if (invalid.length) {
     html += `<div style="color:var(--danger); font-weight:600; margin:8px 0 4px;">⚠ ${invalid.length} invalid line(s) (will be skipped):</div>`;
-    html += invalid.map(e=>`<div style="padding:2px 0; color:var(--danger);">Line ${e.num}: ${e.line}</div>`).join('');
+    html += invalid.map(e=>`<div style="padding:2px 0; color:var(--danger);">Line ${e.num}: ${escapeHtml(e.line)}</div>`).join('');
     html += `<div style="font-size:11px; color:var(--text-3); margin-top:4px;">Expected: YYYY-MM-DD, YYYY-MM-DD</div>`;
   }
   if (!valid.length && !invalid.length) html = '<span style="color:var(--text-3);">Nothing to preview yet.</span>';
@@ -2810,12 +2812,12 @@ function populateFilterDropdowns() {
     const el = document.getElementById(id);
     if (!el) return;
     const cur = el.value;
-    el.innerHTML = '<option value="">All Clients</option>' + _clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+    el.innerHTML = '<option value="">All Clients</option>' + _clients.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
     el.value = cur;
   });
-  ['f-consultant','uf-consultant','if-consultant'].forEach(id => { const el=document.getElementById(id); if(!el) return; const cur=el.value; el.innerHTML='<option value="">All Consultants</option>'+_consultants.map(c=>`<option value="${c.id}">${c.name}</option>`).join(''); el.value=cur; });
+  ['f-consultant','uf-consultant','if-consultant'].forEach(id => { const el=document.getElementById(id); if(!el) return; const cur=el.value; el.innerHTML='<option value="">All Consultants</option>'+_consultants.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join(''); el.value=cur; });
   const cycSel = document.getElementById('f-cycle');
-  if (cycSel) { const cur=cycSel.value; cycSel.innerHTML='<option value="">All Cycles</option>'+_cycles.map(c=>`<option value="${c.id}">${c.start_date} → ${c.end_date}${c.label?' ('+c.label+')':''}</option>`).join(''); cycSel.value=cur; }
+  if (cycSel) { const cur=cycSel.value; cycSel.innerHTML='<option value="">All Cycles</option>'+_cycles.map(c=>`<option value="${c.id}">${c.start_date} → ${c.end_date}${c.label?' ('+escapeHtml(c.label)+')':''}</option>`).join(''); cycSel.value=cur; }
 }
 
 // ============================================================
@@ -2898,13 +2900,13 @@ function populateTsDropdowns() {
   const tsCons = document.getElementById('ts-consultant');
   if (tsCons) {
     const cur = tsCons.value;
-    tsCons.innerHTML = '<option value="">-- Select --</option>' + _consultants.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    tsCons.innerHTML = '<option value="">-- Select --</option>' + _consultants.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
     tsCons.value = cur;
   }
   const tsCli = document.getElementById('ts-client');
   if (tsCli) {
     const cur = tsCli.value;
-    tsCli.innerHTML = '<option value="">-- Select --</option>' + _clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    tsCli.innerHTML = '<option value="">-- Select --</option>' + _clients.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
     tsCli.value = cur;
   }
   // Filter dropdowns (All Timesheets tab)
@@ -2912,20 +2914,20 @@ function populateTsDropdowns() {
     const el = document.getElementById(id);
     if (!el) return;
     const cur = el.value;
-    el.innerHTML = '<option value="">All Consultants</option>' + _consultants.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    el.innerHTML = '<option value="">All Consultants</option>' + _consultants.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
     el.value = cur;
   });
   ['tsf-client'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const cur = el.value;
-    el.innerHTML = '<option value="">All Clients</option>' + _clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    el.innerHTML = '<option value="">All Clients</option>' + _clients.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
     el.value = cur;
   });
   const tsfCyc = document.getElementById('tsf-cycle');
   if (tsfCyc) {
     const cur = tsfCyc.value;
-    tsfCyc.innerHTML = '<option value="">All Cycles</option>' + _cycles.map(c => `<option value="${c.id}">${fmtDate(c.start_date)} - ${fmtDate(c.end_date)}${c.label?' ('+c.label+')':''}</option>`).join('');
+    tsfCyc.innerHTML = '<option value="">All Cycles</option>' + _cycles.map(c => `<option value="${c.id}">${fmtDate(c.start_date)} - ${fmtDate(c.end_date)}${c.label?' ('+escapeHtml(c.label)+')':''}</option>`).join('');
     tsfCyc.value = cur;
   }
 }
@@ -2943,9 +2945,9 @@ function onTsConsultantChange() {
   // Auto-filter client dropdown to only clients this consultant is assigned to
   const consId = document.getElementById('ts-consultant').value;
   const tsCli = document.getElementById('ts-client');
-  if (!consId) { tsCli.innerHTML = '<option value="">-- Select --</option>' + _clients.map(c => `<option value="${c.id}">${c.name}</option>`).join(''); return; }
+  if (!consId) { tsCli.innerHTML = '<option value="">-- Select --</option>' + _clients.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join(''); return; }
   const clientIds = [...new Set(_assignments.filter(a => a.consultant_id === consId).map(a => { const cyc = _cycles.find(c => c.id === a.billing_cycle_id); return cyc?.client_id; }).filter(Boolean))];
-  tsCli.innerHTML = '<option value="">-- Select --</option>' + _clients.filter(c => clientIds.includes(c.id)).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  tsCli.innerHTML = '<option value="">-- Select --</option>' + _clients.filter(c => clientIds.includes(c.id)).map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
   document.getElementById('ts-cycle').innerHTML = '<option value="">-- Select Client First --</option>';
   document.getElementById('ts-cycle-preview-card').style.display = 'none';
 }
@@ -3000,7 +3002,7 @@ function onTsWeekEndingChange() {
   if (matched) {
     cycHidden.value = matched.id;
     const cli = _clients.find(c => c.id === matched.client_id);
-    detectedEl.innerHTML = `<span style="color:var(--text);font-weight:600;">${fmtDate(matched.start_date)} &rarr; ${fmtDate(matched.end_date)}</span>${matched.label ? ' &nbsp;<span style="color:var(--text-3);">('+matched.label+')</span>' : ''}${cli ? ' &nbsp;&mdash;&nbsp;<span style="color:var(--text-2);">'+cli.name+'</span>' : ''}`;
+    detectedEl.innerHTML = `<span style="color:var(--text);font-weight:600;">${fmtDate(matched.start_date)} &rarr; ${fmtDate(matched.end_date)}</span>${matched.label ? ' &nbsp;<span style="color:var(--text-3);">('+escapeHtml(matched.label)+')</span>' : ''}${cli ? ' &nbsp;&mdash;&nbsp;<span style="color:var(--text-2);">'+escapeHtml(cli.name)+'</span>' : ''}`;
     detectedEl.style.border = '1px solid var(--success)';
     detectedEl.style.background = 'var(--success-light)';
     warn.style.display = 'none';
@@ -3085,9 +3087,11 @@ async function saveTimesheet() {
   const editId = document.getElementById('ts-edit-id').value;
   let err;
   if (editId) {
-    ({ error: err } = await sb.from('timesheets').update(payload).eq('id', editId));
+    const r = await unwrapSupabaseQuiet(sb.from('timesheets').update(payload).eq('id', editId));
+    err = r.ok ? null : r.error;
   } else {
-    ({ error: err } = await sb.from('timesheets').upsert(payload, { onConflict: 'consultant_id,billing_cycle_id,week_ending' }));
+    const r = await unwrapSupabaseQuiet(sb.from('timesheets').upsert(payload, { onConflict: 'consultant_id,billing_cycle_id,week_ending' }));
+    err = r.ok ? null : r.error;
   }
   if (err) { toast('Error saving timesheet: ' + err.message, 'error'); return; }
   toast('Timesheet saved!');
@@ -3163,8 +3167,9 @@ async function loadAllTimesheets() {
     const cli   = _clients.find(c => c.id === t.client_id);
     const cyc   = _cycles.find(c => c.id === t.billing_cycle_id);
     const total = ['sat','sun','mon','tue','wed','thu','fri'].reduce((s,d) => s + (parseFloat(t[d+'_hours'])||0), 0);
-    const proofCell = t.proof_url
-      ? `<a href="${t.proof_url}" target="_blank" rel="noopener"
+    const proofHref = safeHttpUrl(t.proof_url);
+    const proofCell = proofHref
+      ? `<a href="${escapeHtml(proofHref)}" target="_blank" rel="noopener"
            style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--brand);font-weight:500;text-decoration:none;"
            title="View proof document">
            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M14 3v2H7v14h10v-7h2v8a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1h8zm5 0l2 2-9.5 9.5-2.5.5.5-2.5L19 3z"/></svg>
@@ -3172,8 +3177,8 @@ async function loadAllTimesheets() {
          </a>`
       : `<span style="color:var(--text-3);font-size:11px;">—</span>`;
     return `<tr>
-      <td><strong>${cons?.name||'—'}</strong></td>
-      <td>${cli?.name||'—'}</td>
+      <td><strong>${escapeHtml(cons?.name||'—')}</strong></td>
+      <td>${escapeHtml(cli?.name||'—')}</td>
       <td class="mono" style="font-size:11px;">${cyc ? fmtDate(cyc.start_date)+' - '+fmtDate(cyc.end_date) : '—'}</td>
       <td class="mono">${fmtDate(t.week_ending)}</td>
       <td class="mono">${t.sat_hours||0}</td><td class="mono">${t.sun_hours||0}</td><td class="mono">${t.mon_hours||0}</td>
@@ -3181,7 +3186,7 @@ async function loadAllTimesheets() {
       <td class="mono">${t.fri_hours||0}</td>
       <td class="mono" style="font-weight:700;">${total%1===0?total:total.toFixed(1)}</td>
       <td>${proofCell}</td>
-      <td style="font-size:11px;color:var(--text-2);">${t.notes||'—'}</td>
+      <td style="font-size:11px;color:var(--text-2);">${escapeHtml(t.notes||'—')}</td>
       <td style="display:flex;gap:4px;">
         <button class="btn btn-secondary btn-xs" onclick="jumpToEditTs('${t.id}')">Edit</button>
         <button class="btn btn-danger btn-xs" onclick="deleteTs('${t.id}')">Del</button>
@@ -3208,7 +3213,8 @@ function jumpToEditTs(tsId) {
 
 async function deleteTs(tsId) {
   if (!confirm('Delete this timesheet entry?')) return;
-  await sb.from('timesheets').delete().eq('id', tsId);
+  const { ok } = await unwrapSupabase('Delete timesheet', sb.from('timesheets').delete().eq('id', tsId));
+  if (!ok) return;
   toast('Timesheet deleted');
   await fetchTimesheets();
   loadAllTimesheets();
@@ -3314,6 +3320,9 @@ CREATE TABLE invoices (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 -- If table already exists, run: ALTER TABLE invoices ADD COLUMN IF NOT EXISTS hours NUMERIC(10,2);
+-- Recommended: apply supabase/migrations/20260504120000_generate_pending_invoices.sql for
+--   UNIQUE(consultant_id, billing_cycle_id) on invoices and generate_pending_invoices() RPC
+--   (client calls RPC first, then falls back to JS if the function is not deployed).
 
 CREATE TABLE settings (
   key TEXT PRIMARY KEY,
