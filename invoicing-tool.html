@@ -175,7 +175,7 @@
 <div id="login-screen">
   <div class="login-box">
     <div style="margin-bottom:28px; text-align:center;">
-      <div style="font-size:22px; font-weight:700; color:#f1f5f9; letter-spacing:-0.5px;">InvoiceFlow</div>
+      <div class="app-brand-display" style="font-size:22px; font-weight:700; color:#f1f5f9; letter-spacing:-0.5px;">InvoiceFlow</div>
       <div style="font-size:13px; color:#64748b; margin-top:4px;">Consultant Billing Management</div>
     </div>
     <div class="form-group">
@@ -201,7 +201,7 @@
   <!-- Sidebar -->
   <nav id="sidebar">
     <div style="padding:20px; border-bottom:1px solid #1e293b;">
-      <div style="font-size:16px; font-weight:700; color:#f1f5f9; letter-spacing:-0.3px;">InvoiceFlow</div>
+      <div class="app-brand-display" style="font-size:16px; font-weight:700; color:#f1f5f9; letter-spacing:-0.3px;">InvoiceFlow</div>
       <div style="font-size:11px; color:#475569; margin-top:2px;">Billing Management</div>
     </div>
     <div style="flex:1; overflow-y:auto; padding:12px 0;">
@@ -599,6 +599,11 @@
           <div class="card">
             <div class="card-header"><span style="font-weight:600;">Notification Settings</span></div>
             <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Application name</label>
+                <input type="text" id="app-display-name" class="form-control" placeholder="InvoiceFlow" maxlength="80" autocomplete="off">
+                <p style="font-size:11px; color:var(--text-3); margin-top:4px;">Shown in the sidebar, browser tab title, and login screen after you save (leave blank to use InvoiceFlow).</p>
+              </div>
               <div class="form-group">
                 <label class="form-label">Notification Email</label>
                 <input type="email" id="notif-email" class="form-control" placeholder="billing@yourcompany.com">
@@ -1169,6 +1174,7 @@ async function onLoggedIn(email) {
   document.getElementById('app').style.display = 'block';
   document.getElementById('user-email-display').textContent = email;
   await loadAllData();
+  await loadSettings();
   await checkPendingOnLogin();
 }
 
@@ -2936,17 +2942,34 @@ async function saveBulkCycles() {
 // ============================================================
 //  SETTINGS
 // ============================================================
+const DEFAULT_APP_DISPLAY_NAME = 'InvoiceFlow';
+
+function applyAppDisplayName(raw) {
+  const name = (raw == null ? '' : String(raw)).trim();
+  const display = name.length ? name.slice(0, 80) : DEFAULT_APP_DISPLAY_NAME;
+  document.querySelectorAll('.app-brand-display').forEach(el => { el.textContent = display; });
+  document.title = display + ' — Consultant Billing';
+}
+
 async function loadSettings() {
   const { ok, data } = await unwrapSupabase('Load settings', sb.from('settings').select('*'));
   const map = {};
   if (ok) (data||[]).forEach(s => map[s.key] = s.value);
   document.getElementById('notif-email').value = map['notification_email']||'';
+  const appNameEl = document.getElementById('app-display-name');
+  if (appNameEl) appNameEl.value = map['app_display_name'] || '';
+  applyAppDisplayName(map['app_display_name'] || '');
 }
 
 async function saveSettings() {
   const email = document.getElementById('notif-email').value;
-  const { ok } = await unwrapSupabase('Save settings', sb.from('settings').upsert({ key:'notification_email', value:email }, { onConflict:'key' }));
+  const appName = document.getElementById('app-display-name').value.trim().slice(0, 80);
+  const { ok } = await unwrapSupabase('Save settings', sb.from('settings').upsert([
+    { key: 'notification_email', value: email },
+    { key: 'app_display_name', value: appName },
+  ], { onConflict: 'key' }));
   if (!ok) return;
+  applyAppDisplayName(appName);
   toast('Settings saved');
 }
 
