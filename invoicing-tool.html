@@ -6,6 +6,7 @@
   <title>InvoiceFlow — Consultant Billing</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -137,6 +138,18 @@
 
     /* Cycle chip */
     .cycle-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--brand-light); color: var(--brand); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; margin: 2px; }
+
+    /* Role badges */
+    .role-admin    { background: #fde68a; color: #92400e; border: 1px solid #fcd34d; }
+    .role-ar       { background: var(--brand-light); color: var(--brand); border: 1px solid #bfdbfe; }
+    .role-manager  { background: #ede9fe; color: #5b21b6; border: 1px solid #c4b5fd; }
+
+    /* Awaiting approval row highlight */
+    .badge-awaiting { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+    .rejection-note { background: #fef2f2; border-left: 3px solid #ef4444; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #991b1b; margin-top: 4px; }
+
+    /* Role-hidden elements */
+    .role-hidden { display: none !important; }
   </style>
 </head>
 <body>
@@ -145,6 +158,8 @@
 <script>
   const SUPABASE_URL = 'https://npkpfopaqpsbohywlhjf.supabase.co';
   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5wa3Bmb3BhcXBzYm9oeXdsaGpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0ODg1MzIsImV4cCI6MjA5MzA2NDUzMn0.Cq_drn7edTGpTnZ1WYBiXtuHUmQdNQwlkIi_AlhQ87A';
+  // ♥ Set this to your email — that account always gets admin role automatically
+  const ADMIN_EMAIL = 'admin@yourcompany.com';
 </script>
 
 <!-- Config Banner -->
@@ -224,6 +239,11 @@
         <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
         Assignments
       </div>
+      <div class="nav-link" onclick="showSection('timesheets')">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+        Timesheets
+        <span id="timesheets-badge" style="margin-left:auto; background:#f59e0b; color:white; border-radius:999px; font-size:10px; padding:1px 7px; display:none;">0</span>
+      </div>
       <div style="height:1px; background:#1e293b; margin:10px 0;"></div>
       <div class="nav-link" onclick="showSection('settings')">
         <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -247,7 +267,7 @@
 
       <!-- DASHBOARD -->
       <div id="section-dashboard" class="section active">
-        <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:16px; margin-bottom:24px;">
+        <div style="display:grid; grid-template-columns:repeat(6,1fr); gap:16px; margin-bottom:24px;">
           <div class="stat-card">
             <div class="stat-value" id="stat-consultants">—</div>
             <div class="stat-label">Total Consultants</div>
@@ -267,6 +287,10 @@
           <div class="stat-card" style="border-left:3px solid #1a56db;">
             <div class="stat-value" style="color:#1a56db;" id="stat-upcoming">—</div>
             <div class="stat-label">Active / Upcoming Cycles</div>
+          </div>
+          <div class="stat-card" style="border-left:3px solid #f59e0b;">
+            <div class="stat-value" style="color:#b45309;" id="stat-missing-ts">—</div>
+            <div class="stat-label">Missing Timesheets</div>
           </div>
         </div>
         <div class="card">
@@ -297,7 +321,7 @@
               Export CSV
             </button>
           </div>
-          <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Consultant</th><th>Client</th><th>Cycle</th><th>Period</th><th>Billing Rate</th><th>Hours</th><th>Total Amount</th><th>Actions</th></tr></thead><tbody id="pending-body"><tr><td colspan="8" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
+          <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Consultant</th><th>Client</th><th>Cycle</th><th>Period</th><th>Billing Rate</th><th>Hours</th><th>Total Amount</th><th>Timesheets</th><th>Actions</th></tr></thead><tbody id="pending-body"><tr><td colspan="10" style="color:var(--text-3); text-align:center; padding:30px;">Loading...</td></tr></tbody></table></div>
         </div>
       </div>
 
@@ -400,82 +424,213 @@
 
       <!-- ASSIGNMENTS -->
       <div id="section-assignments" class="section">
-        <div style="display:grid; grid-template-columns:280px 1fr; gap:16px; align-items:start;">
 
-          <!-- Left: Client + Cycle picker -->
-          <div class="card" style="position:sticky; top:74px;">
-            <div class="card-header"><span style="font-weight:600; font-size:13px;">Filter</span></div>
-            <div class="card-body" style="padding:16px;">
-              <div class="form-group">
-                <label class="form-label">Client</label>
-                <select id="asgn-client" class="form-control" onchange="onAssignClientChange()"><option value="">&#8212; Select Client &#8212;</option></select>
+        <!-- Filter bar -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-body" style="padding:14px 20px;">
+            <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+              <div class="form-group" style="margin-bottom:0; min-width:260px;">
+                <label class="form-label">Client *</label>
+                <select id="asgn-client" class="form-control" onchange="onAssignClientChange()">
+                  <option value="">&#8212; Select Client &#8212;</option>
+                </select>
               </div>
-              <div class="form-group">
-                <label class="form-label">Assign From Date</label>
-                <input type="date" id="asgn-from-date" class="form-control" style="font-size:12px;" onchange="onAssignFromDateChange()" placeholder="Select start date">
-                <p style="font-size:10px; color:var(--text-3); margin:4px 0 0;">Auto-selects all active &amp; future cycles from this date</p>
+              <div style="display:flex;align-items:center;gap:8px;padding-bottom:2px;">
+                <input type="checkbox" id="asgn-show-ended" onchange="renderAssignmentTable()" style="accent-color:var(--brand);width:15px;height:15px;">
+                <label for="asgn-show-ended" style="font-size:13px;color:var(--text-2);cursor:pointer;white-space:nowrap;">Show ended</label>
               </div>
-              <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
-                  Billing Cycles
-                  <span style="display:flex; gap:6px;">
-                    <button class="btn btn-xs btn-secondary" onclick="selectAllCycles(true)">All</button>
-                    <button class="btn btn-xs btn-secondary" onclick="selectAllCycles(false)">None</button>
-                  </span>
-                </label>
-                <div id="asgn-cycle-list" style="border:1px solid var(--border); border-radius:6px; max-height:220px; overflow-y:auto; background:var(--surface-2);">
-                  <div style="padding:12px; color:var(--text-3); font-size:12px; text-align:center;">Select a client first</div>
-                </div>
-              </div>
-            </div>
-            <div style="padding:12px 16px; border-top:1px solid var(--border);">
-              <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="loadAssignments()">Load Assignments</button>
+              <button class="btn btn-primary" onclick="loadAssignments()" style="margin-bottom:0;">Load Assignments</button>
+              <button class="btn btn-secondary" onclick="clearAsgnFilters()" style="margin-bottom:0;">Clear</button>
             </div>
           </div>
+        </div>
 
-          <!-- Right: Consultant table -->
-          <div>
-            <div class="card" id="asgn-card" style="display:none;">
-              <div class="card-header">
-                <div>
-                  <span style="font-weight:600;">Consultant Assignments</span>
-                  <div id="asgn-cycle-summary" style="font-size:11px; color:var(--text-3); margin-top:2px;"></div>
+        <!-- Assignment table -->
+        <div class="card" id="asgn-card" style="display:none;">
+          <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+            <div>
+              <span style="font-weight:600;">Consultant Assignments</span>
+              <span id="asgn-cycle-summary" style="font-size:11px; color:var(--text-3); margin-left:10px;"></span>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openNewAsgnModal()">&#43; New Assignment</button>
+          </div>
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>Consultant</th>
+                  <th>Billing Rate</th>
+                  <th>Starts At</th>
+                  <th>Ends At</th>
+                  <th>Status</th>
+                  <th>Billing Cycles</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="asgn-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="asgn-empty" style="color:var(--text-3); font-size:13px; text-align:center; padding:60px 0;">
+          Select a client and click <strong>Load Assignments</strong>.
+        </div>
+
+      </div>
+
+
+      <!-- TIMESHEETS -->
+      <div id="section-timesheets" class="section">
+        <div style="display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid var(--border);">
+          <button id="ts-tab-entry" onclick="switchTsTab('entry')" style="padding:8px 20px;font-size:13px;font-weight:600;background:none;border:none;border-bottom:2px solid var(--brand);margin-bottom:-2px;color:var(--brand);cursor:pointer;">Submit Timesheet</button>
+          <button id="ts-tab-all" onclick="switchTsTab('all')" style="padding:8px 20px;font-size:13px;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text-2);cursor:pointer;">All Timesheets</button>
+        </div>
+        <div id="ts-pane-entry">
+          <div style="display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start;">
+            <div class="card" style="position:sticky;top:74px;">
+              <div class="card-header"><span style="font-weight:600;font-size:13px;">Timesheet Entry</span></div>
+              <div class="card-body" style="padding:16px;">
+                <div class="form-group">
+                  <label class="form-label">Consultant *</label>
+                  <select id="ts-consultant" class="form-control" onchange="onTsConsultantChange()"><option value="">-- Select --</option></select>
                 </div>
-                <div style="display:flex; gap:8px;">
-                  <button class="btn btn-secondary btn-sm" onclick="selectAllConsultants(true)">Select All</button>
-                  <button class="btn btn-secondary btn-sm" onclick="selectAllConsultants(false)">Deselect All</button>
-                  <button class="btn btn-primary btn-sm" onclick="bulkAssign()">Assign Selected</button>
-                  <button class="btn btn-danger btn-sm" onclick="bulkUnassign()">Unassign Selected</button>
+                <div class="form-group">
+                  <label class="form-label">Client *</label>
+                  <select id="ts-client" class="form-control" onchange="onTsClientChange()"><option value="">-- Select --</option></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Week Ending (Friday) *</label>
+                  <input type="date" id="ts-week-ending" class="form-control" onchange="onTsWeekEndingChange()">
+                  <p style="font-size:10px;color:var(--text-3);margin:4px 0 0;">Auto-snaps to nearest Friday</p>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Billing Cycle <span style="font-weight:400;color:var(--text-3);">(auto-detected)</span></label>
+                  <div id="ts-cycle-detected" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text-3);background:var(--surface-2);">Select consultant, client and week ending first</div>
+                  <input type="hidden" id="ts-cycle">
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Hours by Day (Sat to Fri)</label>
+                  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:8px;">
+                    <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text-2);">SAT</div>
+                    <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text-2);">SUN</div>
+                    <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text-2);">MON</div>
+                    <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text-2);">TUE</div>
+                    <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text-2);">WED</div>
+                    <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text-2);">THU</div>
+                    <div style="text-align:center;font-size:10px;font-weight:700;color:var(--text-2);">FRI</div>
+                    <input type="number" id="ts-sat" class="form-control" style="text-align:center;padding:5px 2px;font-size:12px;" min="0" max="24" step="0.5" value="0" oninput="updateTsTotal()">
+                    <input type="number" id="ts-sun" class="form-control" style="text-align:center;padding:5px 2px;font-size:12px;" min="0" max="24" step="0.5" value="0" oninput="updateTsTotal()">
+                    <input type="number" id="ts-mon" class="form-control" style="text-align:center;padding:5px 2px;font-size:12px;" min="0" max="24" step="0.5" value="0" oninput="updateTsTotal()">
+                    <input type="number" id="ts-tue" class="form-control" style="text-align:center;padding:5px 2px;font-size:12px;" min="0" max="24" step="0.5" value="0" oninput="updateTsTotal()">
+                    <input type="number" id="ts-wed" class="form-control" style="text-align:center;padding:5px 2px;font-size:12px;" min="0" max="24" step="0.5" value="0" oninput="updateTsTotal()">
+                    <input type="number" id="ts-thu" class="form-control" style="text-align:center;padding:5px 2px;font-size:12px;" min="0" max="24" step="0.5" value="0" oninput="updateTsTotal()">
+                    <input type="number" id="ts-fri" class="form-control" style="text-align:center;padding:5px 2px;font-size:12px;" min="0" max="24" step="0.5" value="0" oninput="updateTsTotal()">
+                  </div>
+                  <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:12px;color:var(--text-2);font-weight:600;">Total Hours</span>
+                    <span id="ts-total-display" class="mono" style="font-size:18px;font-weight:700;color:var(--brand);">0</span>
+                  </div>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                  <label class="form-label">Notes <span style="font-weight:400;color:var(--text-3);">(optional)</span></label>
+                  <textarea id="ts-notes" class="form-control" rows="2" placeholder="Any notes for this week..."></textarea>
                 </div>
               </div>
-              <div class="tbl-wrap"><table class="tbl"><thead><tr><th><input type="checkbox" id="select-all-chk" onchange="selectAllConsultants(this.checked)"></th><th>Consultant</th><th>Billing Rate (for this client)</th><th>Starts At</th><th>Ends At</th><th>Status across selected cycles</th></tr></thead><tbody id="asgn-body"></tbody></table></div>
+              <div id="ts-cycle-warning" style="display:none;padding:8px 16px;background:#fef3c7;border-top:1px solid #fcd34d;font-size:12px;color:#92400e;">
+                The selected week is outside the billing cycle dates.
+              </div>
+              <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;">
+                <input type="hidden" id="ts-edit-id">
+                <button class="btn btn-secondary btn-sm" onclick="clearTsForm()">Clear</button>
+                <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="saveTimesheet()">Save Timesheet</button>
+              </div>
             </div>
-            <div id="asgn-empty" style="color:var(--text-3); font-size:13px; text-align:center; padding:60px 0;">Select a client and at least one billing cycle, then click <strong>Load Assignments</strong>.</div>
+            <div>
+              <div class="card" id="ts-cycle-preview-card" style="display:none;">
+                <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+                  <span style="font-weight:600;">Cycle Coverage</span>
+                  <span id="ts-coverage-badge" class="badge" style="background:var(--surface-3);color:var(--text-2);font-size:13px;">0%</span>
+                </div>
+                <div id="ts-cycle-weeks-body" style="padding:16px;">
+                  <div style="color:var(--text-3);text-align:center;padding:20px;">Select a billing cycle</div>
+                </div>
+              </div>
+            </div>
           </div>
-
+        </div>
+        <div id="ts-pane-all" style="display:none;">
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-body">
+              <div class="filter-bar">
+                <div class="form-group"><label class="form-label">Consultant</label><select id="tsf-consultant" class="form-control" onchange="loadAllTimesheets()"><option value="">All Consultants</option></select></div>
+                <div class="form-group"><label class="form-label">Client</label><select id="tsf-client" class="form-control" onchange="loadAllTimesheets()"><option value="">All Clients</option></select></div>
+                <div class="form-group"><label class="form-label">Billing Cycle</label><select id="tsf-cycle" class="form-control" onchange="loadAllTimesheets()"><option value="">All Cycles</option></select></div>
+                <div class="form-group"><label class="form-label">&nbsp;</label><button class="btn btn-secondary" onclick="clearTsFilters()">Clear</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-weight:600;">All Timesheet Entries</span>
+              <button class="btn btn-primary btn-sm" onclick="openGsImportModal()" style="display:flex;align-items:center;gap:6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L11 14.17V7h2v7.17l2.59-2.58L17 13l-5 5z"/></svg>
+                Import from Google Sheets
+              </button>
+            </div>
+            <div class="tbl-wrap">
+              <table class="tbl">
+                <thead><tr><th>Consultant</th><th>Client</th><th>Billing Cycle</th><th>Week Ending</th><th>Sat</th><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Total</th><th>Proof</th><th>Notes</th><th>Actions</th></tr></thead>
+                <tbody id="all-timesheets-body"><tr><td colspan="15" style="color:var(--text-3);text-align:center;padding:30px;">Loading...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- SETTINGS -->
       <div id="section-settings" class="section">
-        <div class="card" style="max-width:500px;">
-          <div class="card-header"><span style="font-weight:600;">Notification Settings</span></div>
-          <div class="card-body">
-            <div class="form-group">
-              <label class="form-label">Notification Email</label>
-              <input type="email" id="notif-email" class="form-control" placeholder="billing@yourcompany.com">
-              <p style="font-size:11px; color:var(--text-3); margin-top:4px;">An email is sent to this address on login when there are pending invoices.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:900px;">
+
+          <div class="card">
+            <div class="card-header"><span style="font-weight:600;">Notification Settings</span></div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Notification Email</label>
+                <input type="email" id="notif-email" class="form-control" placeholder="billing@yourcompany.com">
+                <p style="font-size:11px; color:var(--text-3); margin-top:4px;">An email is sent to this address on login when there are pending invoices.</p>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Supabase URL</label>
+                <input type="text" id="settings-sb-url" class="form-control" placeholder="https://xxx.supabase.co">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Supabase Anon Key</label>
+                <input type="text" id="settings-sb-key" class="form-control" placeholder="eyJ…">
+              </div>
+              <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
             </div>
-            <div class="form-group">
-              <label class="form-label">Supabase URL</label>
-              <input type="text" id="settings-sb-url" class="form-control" placeholder="https://xxx.supabase.co">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Supabase Anon Key</label>
-              <input type="text" id="settings-sb-key" class="form-control" placeholder="eyJ…">
-            </div>
-            <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
           </div>
+
+          <div class="card">
+            <div class="card-header"><span style="font-weight:600;">Google Sheets Integration</span></div>
+            <div class="card-body">
+              <p style="font-size:12px;color:var(--text-2);margin-bottom:14px;line-height:1.6;">
+                Connect your Google account to import timesheets from a Google Sheet.
+                The Sheet should have columns: <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px;">Consultant Name, Client Name, Week Ending, Hours (per day or total), Proof URL</code>.
+              </p>
+              <div class="form-group">
+                <label class="form-label">Google OAuth Client ID</label>
+                <input type="text" id="gs-client-id" class="form-control" placeholder="xxxx.apps.googleusercontent.com">
+                <p style="font-size:11px;color:var(--text-3);margin-top:4px;">From Google Cloud Console → APIs &amp; Services → Credentials → OAuth 2.0 Client IDs</p>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="saveGsClientId()">Save</button>
+                <button class="btn btn-secondary" id="gs-auth-btn" onclick="authorizeGoogleSheets()">Authorize Google Account</button>
+                <span id="gs-auth-status" style="font-size:11px;color:var(--text-3);"></span>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -605,17 +760,202 @@
   </div>
 </div>
 
-<!-- Mark as Invoiced Modal -->
-<div class="modal-overlay" id="invoice-modal">
+<!-- Edit Assignment Modal -->
+<div class="modal-overlay" id="edit-asgn-modal">
   <div class="modal" style="max-width:420px;">
-    <div class="modal-header"><h3 style="font-size:15px; font-weight:600; margin:0;">Mark as Invoiced</h3><button class="modal-close" onclick="closeModal('invoice-modal')">×</button></div>
+    <div class="modal-header"><h3 style="font-size:15px;font-weight:600;margin:0;">Edit Assignment</h3><button class="modal-close" onclick="closeModal('edit-asgn-modal')">&#215;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="ea-id">
+      <p id="ea-desc" style="font-size:12px;color:var(--text-2);margin-bottom:14px;"></p>
+      <div class="form-group">
+        <label class="form-label">Billing Rate ($/hr)</label>
+        <input type="number" id="ea-rate" class="form-control" placeholder="0.00" step="0.01" min="0">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Start Date <span style="font-weight:400;color:var(--text-3);">(optional)</span></label>
+          <input type="date" id="ea-start" class="form-control">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">End Date <span style="font-weight:400;color:var(--text-3);">(optional)</span></label>
+          <input type="date" id="ea-end" class="form-control">
+        </div>
+      </div>
+      <p style="font-size:11px;color:var(--text-3);margin:10px 0 0;padding:8px 10px;background:var(--surface-2);border-radius:6px;line-height:1.6;">
+        <strong>Start Date:</strong> Cycles that end before this date will be <em>removed</em> from the assignment (consultant wasn't there yet). Re-add via <strong>Billing Cycles</strong>.<br>
+        <strong>End Date:</strong> Cycles starting after this date won't generate invoices. Consultant shows as <strong>Ended</strong>. Clear to restore.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" onclick="deleteAssignment()">Remove Assignment</button>
+      <button class="btn btn-secondary" onclick="closeModal('edit-asgn-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAssignment()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Billing Cycles Modal -->
+<div class="modal-overlay" id="cons-cycles-modal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <div>
+        <h3 style="font-size:15px;font-weight:600;margin:0;" id="cc-title">Billing Cycles</h3>
+        <p style="font-size:11px;color:var(--text-3);margin:3px 0 0;" id="cc-subtitle"></p>
+      </div>
+      <button class="modal-close" onclick="closeModal('cons-cycles-modal')">&#215;</button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <span style="font-size:12px;color:var(--text-2);">Check to assign, uncheck to remove. Cycles after End Date are auto-disabled.</span>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-xs btn-secondary" onclick="ccSelectAll(true)">All</button>
+          <button class="btn btn-xs btn-secondary" onclick="ccSelectAll(false)">None</button>
+        </div>
+      </div>
+      <div id="cc-cycle-list" style="max-height:340px;overflow-y:auto;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('cons-cycles-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCycleAssignments()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Assignment Modal -->
+<div class="modal-overlay" id="new-asgn-modal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div>
+        <h3 style="font-size:15px;font-weight:600;margin:0;">New Assignment</h3>
+        <p id="na-subtitle" style="font-size:11px;color:var(--text-3);margin:3px 0 0;"></p>
+      </div>
+      <button class="modal-close" onclick="closeModal('new-asgn-modal')">&#215;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Consultant *</label>
+        <select id="na-consultant" class="form-control">
+          <option value="">&#8212; Select Consultant &#8212;</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Billing Rate ($/hr) *</label>
+        <input type="number" id="na-rate" class="form-control" placeholder="0.00" step="0.01" min="0">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Start Date *</label>
+          <input type="date" id="na-start" class="form-control">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">End Date <span style="font-weight:400;color:var(--text-3);">(optional)</span></label>
+          <input type="date" id="na-end" class="form-control">
+        </div>
+      </div>
+      <p style="font-size:11px;color:var(--text-3);margin:12px 0 0;padding:8px 10px;background:var(--surface-2);border-radius:6px;">
+        Consultant will be assigned to all billing cycles for this client that overlap with the selected date range.
+        Cycles starting after the end date will be excluded.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('new-asgn-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNewAssignment()">Create Assignment</button>
+    </div>
+  </div>
+</div>
+
+<!-- Google Sheets Import Modal -->
+<div class="modal-overlay" id="gs-import-modal">
+  <div class="modal" style="max-width:860px;width:95vw;">
+    <div class="modal-header">
+      <div>
+        <h3 style="font-size:15px;font-weight:600;margin:0;">Import Timesheets from Google Sheets</h3>
+        <p id="gs-import-status" style="font-size:11px;color:var(--text-3);margin:3px 0 0;"></p>
+      </div>
+      <button class="modal-close" onclick="closeModal('gs-import-modal')">&#215;</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Step 1: Sheet URL -->
+      <div id="gs-step-1">
+        <div class="form-group">
+          <label class="form-label">Google Sheet URL or ID *</label>
+          <input type="text" id="gs-sheet-url" class="form-control"
+            placeholder="https://docs.google.com/spreadsheets/d/SHEET_ID/edit  or just the Sheet ID">
+          <p style="font-size:11px;color:var(--text-3);margin-top:4px;">
+            The sheet must be shared with your Google account (or be publicly viewable).
+          </p>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label">Tab / Sheet Name <span style="font-weight:400;color:var(--text-3);">(optional, defaults to first tab)</span></label>
+            <input type="text" id="gs-sheet-tab" class="form-control" placeholder="Sheet1">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label">Header Row <span style="font-weight:400;color:var(--text-3);">(default: 1)</span></label>
+            <input type="number" id="gs-header-row" class="form-control" value="1" min="1">
+          </div>
+        </div>
+        <div style="margin-top:14px;">
+          <button class="btn btn-primary" onclick="fetchGsPreview()">
+            &#128196; Load Sheet &amp; Map Columns
+          </button>
+          <span id="gs-fetch-spinner" style="display:none;margin-left:10px;font-size:12px;color:var(--text-3);">Loading…</span>
+        </div>
+      </div>
+
+      <!-- Step 2: Column mapping + preview -->
+      <div id="gs-step-2" style="display:none;margin-top:16px;">
+        <p style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:10px;">Map Sheet columns to fields:</p>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;" id="gs-col-map">
+          <!-- populated dynamically -->
+        </div>
+
+        <p style="font-size:12px;font-weight:600;color:var(--text-2);margin:12px 0 8px;">Preview (first 10 rows):</p>
+        <div style="overflow-x:auto;max-height:260px;border:1px solid var(--border);border-radius:8px;">
+          <table class="tbl" id="gs-preview-table" style="font-size:11px;">
+            <thead id="gs-preview-head"></thead>
+            <tbody id="gs-preview-body"></tbody>
+          </table>
+        </div>
+        <p id="gs-map-hint" style="font-size:11px;color:var(--warning);margin-top:8px;display:none;">
+          ⚠ Map at least: Consultant, Week Ending, and either Total Hours or individual day columns.
+        </p>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <div style="font-size:11px;color:var(--text-3);" id="gs-import-count"></div>
+      <button class="btn btn-secondary" onclick="closeModal('gs-import-modal')">Cancel</button>
+      <button class="btn btn-primary" id="gs-import-btn" onclick="runGsImport()" style="display:none;">
+        &#10003; Import Timesheets
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Mark as Invoiced Modal -->
+
+<div class="modal-overlay" id="invoice-modal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header"><h3 style="font-size:15px; font-weight:600; margin:0;">Mark as Invoiced</h3><button class="modal-close" onclick="closeModal('invoice-modal')">x</button></div>
     <div class="modal-body">
       <input type="hidden" id="inv-pending-id">
-      <p style="font-size:13px; color:var(--text-2); margin-bottom:16px;" id="inv-desc"></p>
-      <div class="form-group"><label class="form-label">Invoice Number <span style="font-weight:400; color:var(--text-3);">(Optional)</span></label><input type="text" id="inv-number" class="form-control" placeholder="INV-001"></div>
+      <p style="font-size:13px; color:var(--text-2); margin-bottom:8px;" id="inv-desc"></p>
+      <div id="inv-ts-info"></div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Hours <span style="font-weight:400;color:var(--text-3);">(pre-filled from timesheets)</span></label>
+          <input type="number" id="inv-hours" class="form-control" placeholder="0" step="0.5" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Invoice Number <span style="font-weight:400; color:var(--text-3);">(Optional)</span></label>
+          <input type="text" id="inv-number" class="form-control" placeholder="INV-001">
+        </div>
+      </div>
       <div class="form-group"><label class="form-label">Invoice Date</label><input type="date" id="inv-date" class="form-control"></div>
     </div>
-    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('invoice-modal')">Cancel</button><button class="btn btn-success" onclick="confirmMarkInvoiced()">Confirm — Mark as Invoiced</button></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('invoice-modal')">Cancel</button><button class="btn btn-success" onclick="confirmMarkInvoiced()">Confirm - Mark as Invoiced</button></div>
   </div>
 </div>
 
@@ -761,7 +1101,7 @@ function showSection(id) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
   document.getElementById(`section-${id}`).classList.add('active');
-  const titles = { dashboard:'Dashboard', pending:'Pending Invoices', invoiced:'Invoiced', upcoming:'Upcoming Cycles', consultants:'Consultants', clients:'Clients', 'billing-cycles':'Billing Cycles', assignments:'Assignments', settings:'Settings' };
+  const titles = { dashboard:'Dashboard', pending:'Pending Invoices', invoiced:'Invoiced', upcoming:'Upcoming Cycles', consultants:'Consultants', clients:'Clients', 'billing-cycles':'Billing Cycles', assignments:'Assignments', timesheets:'Timesheets', settings:'Settings' };
   document.getElementById('page-title').textContent = titles[id] || id;
   document.querySelectorAll('.nav-link').forEach(n => {
     if (n.getAttribute('onclick') === `showSection('${id}')`) n.classList.add('active');
@@ -774,6 +1114,7 @@ function showSection(id) {
   if (id === 'clients') loadClients();
   if (id === 'billing-cycles') loadBillingCycles();
   if (id === 'assignments') loadAssignmentDropdowns();
+  if (id === 'timesheets') loadTimesheets();
   if (id === 'settings') loadSettings();
 }
 
@@ -808,13 +1149,13 @@ async function fetchAssignments() {
 async function fetchPendingInvoices() {
   const { data } = await sb.from('invoices').select('*').eq('status','pending');
   const today = new Date().toISOString().split('T')[0];
-  // Only count invoices for ended cycles as truly "pending"
   _pendingInvoices = (data || []).filter(r => {
     const cyc = _cycles.find(c => c.id === r.billing_cycle_id);
     return cyc && cyc.end_date < today;
   });
-  // Store all pending (including upcoming) separately for the upcoming section
   _allPendingInvoices = data || [];
+  // Also refresh timesheets for coverage calculations
+  await fetchTimesheets();
 }
 
 // ============================================================
@@ -825,8 +1166,6 @@ async function autoGeneratePending() {
   const { data: existing } = await sb.from('invoices').select('consultant_id,billing_cycle_id').in('status',['pending','invoiced']);
   const existingSet = new Set((existing||[]).map(e => `${e.consultant_id}__${e.billing_cycle_id}`));
 
-  // Build a rate lookup: consultant_id -> client_id -> billing_rate
-  // from consultant_billing_cycles (per-assignment rate) and consultant_client_rates (fallback)
   const { data: clientRatesAll } = await sb.from('consultant_client_rates').select('*');
   const clientRatesMap = {};
   (clientRatesAll||[]).forEach(r => { clientRatesMap[`${r.consultant_id}__${r.client_id}`] = r.billing_rate; });
@@ -835,21 +1174,24 @@ async function autoGeneratePending() {
   for (const asgn of _assignments) {
     const cycle = _cycles.find(c => c.id === asgn.billing_cycle_id);
     if (!cycle) continue;
-    if (cycle.end_date < today) {
-      const key = `${asgn.consultant_id}__${asgn.billing_cycle_id}`;
-      if (!existingSet.has(key)) {
-        // Prefer the rate stored on the assignment; fall back to the consultant-client rate table
-        const rate = asgn.billing_rate != null
-          ? asgn.billing_rate
-          : (clientRatesMap[`${asgn.consultant_id}__${cycle.client_id}`] ?? null);
-        toInsert.push({
-          consultant_id: asgn.consultant_id,
-          billing_cycle_id: asgn.billing_cycle_id,
-          client_id: cycle.client_id,
-          status: 'pending',
-          billing_rate: rate
-        });
-      }
+    // Skip if cycle hasn't ended yet
+    if (cycle.end_date >= today) continue;
+    // Skip if cycle ended before consultant started
+    if (asgn.start_date && cycle.end_date < asgn.start_date) continue;
+    // Skip if consultant ended before cycle started
+    if (asgn.end_date && asgn.end_date < cycle.start_date) continue;
+    const key = `${asgn.consultant_id}__${asgn.billing_cycle_id}`;
+    if (!existingSet.has(key)) {
+      const rate = asgn.billing_rate != null
+        ? asgn.billing_rate
+        : (clientRatesMap[`${asgn.consultant_id}__${cycle.client_id}`] ?? null);
+      toInsert.push({
+        consultant_id: asgn.consultant_id,
+        billing_cycle_id: asgn.billing_cycle_id,
+        client_id: cycle.client_id,
+        status: 'pending',
+        billing_rate: rate
+      });
     }
   }
   if (toInsert.length) await sb.from('invoices').insert(toInsert);
@@ -873,6 +1215,9 @@ function loadDashboard() {
   const upcomingCount = _assignments.filter(a => { const c=_cycles.find(cy=>cy.id===a.billing_cycle_id); return c && c.end_date >= today2; }).length;
   const ubadge = document.getElementById('upcoming-badge');
   if (ubadge) { if (upcomingCount > 0) { ubadge.textContent = upcomingCount; ubadge.style.display = 'inline'; } else { ubadge.style.display = 'none'; } }
+
+  // Missing timesheet badge update
+  updateMissingTsBadge();
 
   const tbody = document.getElementById('dash-pending-body');
   if (_pendingInvoices.length === 0) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--text-3); text-align:center; padding:30px;">No pending invoices</td></tr>`; return; }
@@ -916,22 +1261,38 @@ async function loadPending() {
   if (toFilter) rows = rows.filter(r => { const cyc = _cycles.find(c=>c.id===r.billing_cycle_id); return cyc && cyc.end_date <= toFilter; });
 
   const tbody = document.getElementById('pending-body');
-  if (rows.length === 0) { tbody.innerHTML = `<tr><td colspan="8" style="color:var(--text-3); text-align:center; padding:30px;">No pending invoices match filters</td></tr>`; return; }
+  if (rows.length === 0) { tbody.innerHTML = `<tr><td colspan="10" style="color:var(--text-3); text-align:center; padding:30px;">No pending invoices match filters</td></tr>`; return; }
+  // Fetch all assignments once for end-date warning
+  const { data: asgnData } = await sb.from('consultant_billing_cycles').select('consultant_id,billing_cycle_id,end_date');
   tbody.innerHTML = rows.map(inv => {
     const cons = _consultants.find(c => c.id === inv.consultant_id);
     const cli = _clients.find(c => c.id === inv.client_id);
     const cyc = _cycles.find(c => c.id === inv.billing_cycle_id);
     const rate = parseFloat(inv.billing_rate) || 0;
-    const hours = inv.hours != null ? inv.hours : '';
+    // Auto-fill hours from timesheets
+    const tsForThis = _timesheets.filter(t => t.consultant_id === inv.consultant_id && t.billing_cycle_id === inv.billing_cycle_id);
+    const tsHours = tsForThis.reduce((sum, t) => sum + ['sat','sun','mon','tue','wed','thu','fri'].reduce((s,d) => s + (parseFloat(t[d+'_hours'])||0), 0), 0);
+    const hours = inv.hours != null ? inv.hours : (tsHours > 0 ? tsHours : '');
     const total = (rate && hours !== '') ? '$' + (rate * parseFloat(hours)).toFixed(2) : '—';
+    // Timesheet coverage
+    const { pct, submitted, expected, missing } = getCycleTimesheetCoverage(inv.consultant_id, inv.billing_cycle_id);
+    const covColor = pct === 100 ? 'var(--success)' : pct > 0 ? 'var(--warning)' : 'var(--danger)';
+    const covBg    = pct === 100 ? 'var(--success-light)' : pct > 0 ? 'var(--warning-light)' : 'var(--danger-light)';
+    const covBadge = `<span class="badge" style="background:${covBg};color:${covColor};">${pct}%</span>`;
+    const missingHint = missing.length ? `<div style="font-size:10px;color:var(--warning);margin-top:2px;">Missing: ${missing.map(f=>fmtDate(f)).join(', ')}</div>` : '';
+    // Assignment end-date warning
+    const asgn = (asgnData||[]).find(a => a.consultant_id === inv.consultant_id && a.billing_cycle_id === inv.billing_cycle_id);
+    const endWarn = (asgn?.end_date && cyc?.end_date && asgn.end_date < cyc.end_date)
+      ? `<div style="font-size:10px;color:var(--warning);margin-top:2px;">&#9888; Ends ${fmtDate(asgn.end_date)} (cycle ends ${fmtDate(cyc.end_date)})</div>` : '';
     return `<tr>
-      <td><strong>${cons?.name || '—'}</strong></td>
+      <td><strong>${cons?.name || '—'}</strong>${endWarn}</td>
       <td>${cli?.name || '—'}</td>
       <td>${cyc?.label || cycleLabel(cyc)}</td>
-      <td class="mono" style="font-size:12px;">${fmtDate(cyc?.start_date)} → ${fmtDate(cyc?.end_date)}</td>
+      <td class="mono" style="font-size:12px;">${fmtDate(cyc?.start_date)} &rarr; ${fmtDate(cyc?.end_date)}</td>
       <td class="mono">$${inv.billing_rate||'—'}/hr</td>
       <td><input type="number" value="${hours}" min="0" step="0.5" style="width:80px;" class="form-control" placeholder="0" onblur="saveInvoiceHours('${inv.id}', this.value, this)" oninput="updatePendingTotal(this, ${rate})"></td>
       <td class="mono" id="total-${inv.id}">${total}</td>
+      <td>${covBadge}${missingHint}</td>
       <td style="display:flex; gap:6px;">
         <button class="btn btn-success btn-xs" onclick="openInvoiceModal('${inv.id}')">Mark Invoiced</button>
         <button class="btn btn-danger btn-xs" onclick="removePendingInvoice('${inv.id}','${inv.consultant_id}','${inv.billing_cycle_id}')">Remove</button>
@@ -1405,6 +1766,25 @@ function openInvoiceModal(invId) {
   const cons = _consultants.find(c => c.id === inv.consultant_id);
   const cli = _clients.find(c => c.id === inv.client_id);
   document.getElementById('inv-desc').textContent = `Consultant: ${cons?.name||'—'} | Client: ${cli?.name||'—'}`;
+  // Auto-fill hours from timesheets + show coverage warning
+  const { pct, submitted, expected, missing } = getCycleTimesheetCoverage(inv.consultant_id, inv.billing_cycle_id);
+  const tsHours = _timesheets.filter(t => t.consultant_id === inv.consultant_id && t.billing_cycle_id === inv.billing_cycle_id)
+    .reduce((sum, t) => sum + ['sat','sun','mon','tue','wed','thu','fri'].reduce((s,d) => s+(parseFloat(t[d+'_hours'])||0), 0), 0);
+  // Pre-fill hours: existing invoice hours override, otherwise use timesheet total
+  const prefillHours = inv.hours != null ? inv.hours : (tsHours > 0 ? tsHours : null);
+  const hoursInput = document.getElementById('inv-hours-prefill');
+  // Show coverage warning inside modal if < 100%
+  let warnHtml = '';
+  if (pct < 100) {
+    const missingStr = missing.map(f => fmtDate(f)).join(', ');
+    warnHtml = `<div style="margin-bottom:12px;background:#fef3c7;border-left:3px solid #f59e0b;padding:8px 12px;border-radius:4px;font-size:12px;color:#92400e;">&#9888; Timesheets cover <strong>${pct}%</strong> of this billing cycle (${submitted}/${expected} weeks). ${missingStr ? 'Missing: '+missingStr+'.' : ''} You can still invoice.</div>`;
+  }
+  const tsInfo = tsHours > 0 ? `<div style="font-size:11px;color:var(--text-2);margin-bottom:12px;">&#128337; Auto-filled <strong>${tsHours}h</strong> from ${submitted} timesheet week(s). You can edit below.</div>` : '';
+  document.getElementById('inv-ts-info').innerHTML = warnHtml + tsInfo;
+  if (prefillHours != null) {
+    const hoursEl = document.getElementById('inv-hours');
+    if (hoursEl) hoursEl.value = prefillHours;
+  }
   openModal('invoice-modal');
 }
 
@@ -1412,7 +1792,12 @@ async function confirmMarkInvoiced() {
   const id = document.getElementById('inv-pending-id').value;
   const num = document.getElementById('inv-number').value;
   const date = document.getElementById('inv-date').value;
-  await sb.from('invoices').update({ status:'invoiced', invoice_number: num||null, invoice_date: date }).eq('id', id);
+  const hoursEl = document.getElementById('inv-hours');
+  const hoursVal = hoursEl ? hoursEl.value : null;
+  const hours = (hoursVal !== '' && hoursVal != null && !isNaN(parseFloat(hoursVal))) ? parseFloat(hoursVal) : null;
+  const updatePayload = { status:'invoiced', invoice_number: num||null, invoice_date: date };
+  if (hours != null) updatePayload.hours = hours;
+  await sb.from('invoices').update(updatePayload).eq('id', id);
   toast('Marked as invoiced!');
   closeModal('invoice-modal');
   await fetchPendingInvoices();
@@ -1644,10 +2029,40 @@ async function saveCycle() {
     toInsert = cycles.map(c => ({ client_id:clientId, cycle_type:type, start_date:c.start, end_date:c.end, label }));
   }
   await sb.from('billing_cycles').insert(toInsert);
+  // Auto-extend: assign existing consultants to newly created cycles
+  await autoExtendAssignmentsToNewCycles(clientId, toInsert.map(c => c.start_date));
   closeModal('cycle-modal');
   toast(`${toInsert.length} billing cycle(s) created`);
   await loadAllData();
   loadBillingCycles();
+}
+
+async function autoExtendAssignmentsToNewCycles(clientId, newCycleStartDates) {
+  // Find newly created cycles for this client
+  await fetchCycles();
+  const newCycles = _cycles.filter(c => c.client_id === clientId && newCycleStartDates.includes(c.start_date));
+  if (newCycles.length === 0) return;
+  // Get all consultants with existing assignments for this client
+  const existingCycleIds = _cycles.filter(c => c.client_id === clientId).map(c => c.id);
+  const { data: existingAsgns } = await sb.from('consultant_billing_cycles').select('*').in('billing_cycle_id', existingCycleIds);
+  const { data: clientRates } = await sb.from('consultant_client_rates').select('*').eq('client_id', clientId);
+  // For each new cycle, assign all consultants that had any assignment for this client
+  const uniqueConsIds = [...new Set((existingAsgns||[]).map(a => a.consultant_id))];
+  if (uniqueConsIds.length === 0) return;
+  const { data: alreadyIn } = await sb.from('consultant_billing_cycles').select('consultant_id,billing_cycle_id').in('billing_cycle_id', newCycles.map(c => c.id));
+  const alreadySet = new Set((alreadyIn||[]).map(a => `${a.consultant_id}__${a.billing_cycle_id}`));
+  const toInsertExt = [];
+  for (const consId of uniqueConsIds) {
+    const rate = (clientRates||[]).find(r => r.consultant_id === consId)?.billing_rate ?? null;
+    for (const cyc of newCycles) {
+      const key = `${consId}__${cyc.id}`;
+      if (!alreadySet.has(key)) toInsertExt.push({ consultant_id: consId, billing_cycle_id: cyc.id, billing_rate: rate });
+    }
+  }
+  if (toInsertExt.length) {
+    await sb.from('consultant_billing_cycles').insert(toInsertExt);
+    toast(`Auto-extended ${toInsertExt.length} assignment(s) to new cycle(s)`);
+  }
 }
 
 async function deleteCycle(id) {
@@ -1676,263 +2091,464 @@ function openCycleModal() {
 // ============================================================
 async function loadAssignmentDropdowns() {
   const sel = document.getElementById('asgn-client');
-  sel.innerHTML = '<option value="">\u2014 Select Client \u2014</option>' + _clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-  document.getElementById('asgn-cycle-list').innerHTML = '<div style="padding:12px; color:var(--text-3); font-size:12px; text-align:center;">Select a client first</div>';
+  if (sel) sel.innerHTML = '<option value="">&#8212; Select Client &#8212;</option>' + _clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
   document.getElementById('asgn-card').style.display = 'none';
   document.getElementById('asgn-empty').style.display = 'block';
 }
 
-function getSelectedCycleIds() {
-  return [...document.querySelectorAll('.cycle-chk:checked')].map(c => c.dataset.id);
-}
-
-function selectAllCycles(checked) {
-  document.querySelectorAll('.cycle-chk').forEach(c => {
-    c.checked = checked;
-  });
-}
-
 function onAssignClientChange() {
-  const clientId = document.getElementById('asgn-client').value;
-  const list = document.getElementById('asgn-cycle-list');
-  // Reset from-date when client changes
-  const fromDateEl = document.getElementById('asgn-from-date');
-  if (fromDateEl) fromDateEl.value = '';
-  if (!clientId) {
-    list.innerHTML = '<div style="padding:12px; color:var(--text-3); font-size:12px; text-align:center;">Select a client first</div>';
-    document.getElementById('asgn-card').style.display = 'none';
-    document.getElementById('asgn-empty').style.display = 'block';
-    return;
-  }
-  renderCycleList(clientId, '');
+  document.getElementById('asgn-card').style.display = 'none';
+  document.getElementById('asgn-empty').style.display = 'block';
 }
 
-function onAssignFromDateChange() {
-  const clientId = document.getElementById('asgn-client').value;
-  if (!clientId) return;
-  const fromDate = document.getElementById('asgn-from-date').value;
-  renderCycleList(clientId, fromDate);
+function clearAsgnFilters() {
+  document.getElementById('asgn-client').value = '';
+  document.getElementById('asgn-start-date').value = '';
+  document.getElementById('asgn-end-date').value = '';
+  document.getElementById('asgn-card').style.display = 'none';
+  document.getElementById('asgn-empty').style.display = 'block';
 }
 
-function renderCycleList(clientId, fromDate) {
-  const list = document.getElementById('asgn-cycle-list');
-  const today = new Date().toISOString().split('T')[0];
-  const clientCycles = _cycles.filter(c => c.client_id === clientId);
-  if (clientCycles.length === 0) {
-    list.innerHTML = '<div style="padding:12px; color:var(--text-3); font-size:12px; text-align:center;">No billing cycles for this client</div>';
-    return;
-  }
-  list.innerHTML = clientCycles.map(c => {
-    const status = c.end_date < today ? 'ended' : (c.start_date <= today ? 'active' : 'upcoming');
-    const statusColor = status === 'ended' ? 'var(--warning)' : status === 'active' ? 'var(--success)' : 'var(--brand)';
-    const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
-    // Auto-check: if fromDate is set, select cycles whose end_date >= fromDate.
-    // This ensures the cycle that CONTAINS the start date is included (not just cycles starting after it).
-    // If no fromDate, select active and upcoming by default.
-    const autoCheck = fromDate
-      ? c.end_date >= fromDate
-      : status !== 'ended';
-    const opacity = status === 'ended' ? 'opacity:0.55;' : '';
-    return `<label style="display:flex; align-items:center; gap:8px; padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border); font-size:12px; ${opacity}" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background=''">
-      <input type="checkbox" class="cycle-chk" data-id="${c.id}" data-status="${status}" data-start="${c.start_date}" data-end="${c.end_date}" ${autoCheck ? 'checked' : ''} style="accent-color:var(--brand); width:14px; height:14px; flex-shrink:0;">
-      <span style="flex:1;">
-        <span class="mono" style="font-size:11px; color:var(--text-2);">${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}</span>
-        <span style="display:flex; gap:4px; align-items:center; margin-top:1px;">
-          ${c.label ? `<span style="color:var(--text-3); font-size:10px;">${c.label}</span>` : ''}
-          <span style="font-size:9px; font-weight:600; color:${statusColor}; text-transform:uppercase;">${statusLabel}</span>
-        </span>
-      </span>
-    </label>`;
-  }).join('');
-}
+// Cache for current loaded assignments
+let _currentAsgnData    = [];   // all consultant_billing_cycles rows for this client
+let _currentAsgnCycles  = [];   // all billing_cycles for this client
+let _currentAsgnClientId = '';
+let _ccConsultantId     = '';   // consultant being edited in the cycles modal
 
 async function loadAssignments() {
-  const cycleIds = getSelectedCycleIds();
   const clientId = document.getElementById('asgn-client').value;
-  const fromDate = document.getElementById('asgn-from-date').value;
-  const empty = document.getElementById('asgn-empty');
-  const card = document.getElementById('asgn-card');
+  if (!clientId) { toast('Select a client first', 'error'); return; }
+  _currentAsgnClientId = clientId;
 
-  if (!clientId || cycleIds.length === 0) {
-    toast('Select a client and at least one billing cycle', 'error');
+  if (!_cycles || _cycles.length === 0) await fetchCycles();
+
+  _currentAsgnCycles = _cycles.filter(c => c.client_id === clientId)
+    .sort((a, b) => a.start_date.localeCompare(b.start_date));
+
+  if (_currentAsgnCycles.length === 0) {
+    toast('No billing cycles found for this client', 'error'); return;
+  }
+
+  const cycleIds = _currentAsgnCycles.map(c => c.id);
+  try {
+    const { data, error } = await sb.from('consultant_billing_cycles')
+      .select('*').in('billing_cycle_id', cycleIds);
+    if (error) throw error;
+    _currentAsgnData = data || [];
+  } catch(e) {
+    toast('Error loading assignments: ' + e.message, 'error'); return;
+  }
+
+  const cli = _clients.find(c => c.id === clientId);
+  const assignedConsIds = [...new Set(_currentAsgnData.map(a => a.consultant_id))];
+  document.getElementById('asgn-cycle-summary').textContent =
+    `${cli?.name || ''} · ${_currentAsgnCycles.length} cycle(s) · ${assignedConsIds.length} consultant(s) assigned`;
+
+  document.getElementById('asgn-card').style.display = 'block';
+  document.getElementById('asgn-empty').style.display = 'none';
+  renderAssignmentTable();
+}
+
+function renderAssignmentTable() {
+  const tbody = document.getElementById('asgn-body');
+  const today = new Date().toISOString().split('T')[0];
+  const totalCycles  = _currentAsgnCycles.length;
+  const showEnded    = document.getElementById('asgn-show-ended')?.checked || false;
+
+  const assignedConsIds = [...new Set(_currentAsgnData.map(a => a.consultant_id))];
+  if (assignedConsIds.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--text-3);text-align:center;padding:30px;">
+      No consultants assigned yet. Click <strong>+ New Assignment</strong> to add one.
+    </td></tr>`;
     return;
   }
 
-  card.style.display = 'block';
-  empty.style.display = 'none';
+  const rows = assignedConsIds.map(cid => {
+    const cons    = _consultants.find(c => c.id === cid);
+    const myAsgns = _currentAsgnData.filter(a => a.consultant_id === cid);
 
-  // Summary label
-  const selectedCycleObjs = _cycles.filter(c => cycleIds.includes(c.id)).sort((a,b)=>a.start_date.localeCompare(b.start_date));
-  document.getElementById('asgn-cycle-summary').textContent =
-    cycleIds.length === 1
-      ? `Cycle: ${fmtDate(selectedCycleObjs[0]?.start_date)} \u2192 ${fmtDate(selectedCycleObjs[0]?.end_date)}`
-      : `${cycleIds.length} billing cycles selected (${fmtDate(selectedCycleObjs[0]?.start_date)} \u2192 ${fmtDate(selectedCycleObjs[selectedCycleObjs.length-1]?.end_date)})`;
-
-  // Fetch all assignments for selected cycles in one go
-  const { data: cycleAssignments } = await sb.from('consultant_billing_cycles').select('*').in('billing_cycle_id', cycleIds);
-  const { data: clientRates } = await sb.from('consultant_client_rates').select('*').eq('client_id', clientId);
-
-  const tbody = document.getElementById('asgn-body');
-  tbody.innerHTML = _consultants.map(c => {
-    // Find assignments for this consultant across selected cycles
-    const myAsgns = (cycleAssignments||[]).filter(a=>a.consultant_id===c.id);
+    const starts  = myAsgns.map(a => a.start_date).filter(Boolean).sort();
+    const ends    = myAsgns.map(a => a.end_date).filter(Boolean).sort();
+    const rateVal = myAsgns.map(a => a.billing_rate).find(r => r != null) ?? null;
     const assignedCount = myAsgns.length;
-    // Pick the first non-null billing_rate across all assignments for this consultant;
-    // fall back to the consultant-client rate table
-    const rateFromAsgn = myAsgns.map(a => a.billing_rate).find(r => r != null && r !== '');
-    const rateFromClient = (clientRates||[]).find(r => r.consultant_id === c.id)?.billing_rate;
-    const rate = rateFromAsgn ?? rateFromClient ?? '';
 
-    // Start date: only pre-fill if there's an existing assignment with a start_date. Otherwise leave blank.
-    const existingStart = myAsgns.length
-      ? myAsgns.map(a=>a.start_date).filter(Boolean).sort()[0] || ''
-      : '';
-    const defaultSdate = existingStart;
+    // Status: ended if end_date is set and in the past
+    const latestEnd = ends.length ? ends[ends.length - 1] : null;
+    const isEnded   = latestEnd && latestEnd < today;
+    const statusLabel = isEnded ? 'Ended' : 'Active';
+    const statusColor = isEnded ? 'var(--text-3)' : 'var(--success)';
+    const statusBg    = isEnded ? 'var(--surface-2)' : 'var(--success-light)';
 
-    const existingEnd = myAsgns.length
-      ? myAsgns.map(a=>a.end_date).filter(Boolean).sort().reverse()[0] || ''
-      : '';
+    return { cid, cons, starts, ends, rateVal, assignedCount, isEnded, statusLabel, statusColor, statusBg, latestEnd };
+  }).filter(r => showEnded ? true : !r.isEnded);
 
-    let statusHtml;
-    if (assignedCount === 0) statusHtml = '<span class="badge" style="background:var(--surface-3);color:var(--text-2);">Unassigned</span>';
-    else if (assignedCount === cycleIds.length) statusHtml = '<span class="badge badge-active">All ' + cycleIds.length + ' cycle' + (cycleIds.length>1?'s':'') + '</span>';
-    else statusHtml = '<span class="badge badge-pending">' + assignedCount + ' of ' + cycleIds.length + ' cycles</span>';
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--text-3);text-align:center;padding:30px;">
+      No active assignments. Check <strong>Show ended</strong> to see ended ones.
+    </td></tr>`;
+    return;
+  }
 
-    return `<tr id="asgn-row-${c.id}">
-      <td><input type="checkbox" class="asgn-chk" data-id="${c.id}" ${assignedCount>0?'checked':''}></td>
-      <td><strong>${c.name}</strong><br><span style="font-size:11px;color:var(--text-3);">${c.email||''}</span></td>
-      <td><div style="display:flex;align-items:center;gap:6px;"><span style="color:var(--text-3);font-size:12px;">$</span><input type="number" id="rate-${c.id}" class="form-control" style="width:100px;" placeholder="0.00" step="0.01" value="${rate}"></div></td>
-      <td><input type="date" id="sdate-${c.id}" class="form-control" style="width:140px;" value="${defaultSdate}" title="Consultant start date for this assignment"></td>
-      <td><input type="date" id="edate-${c.id}" class="form-control" style="width:140px;" value="${existingEnd}" title="Consultant end date for this assignment"></td>
-      <td>${statusHtml}</td>
+  tbody.innerHTML = rows.map(({ cid, cons, starts, ends, rateVal, assignedCount, statusLabel, statusColor, statusBg, isEnded }) => {
+    const startDisp = starts.length ? `<span class="mono" style="font-size:12px;">${fmtDate(starts[0])}</span>`
+                                    : `<span style="color:var(--text-3);">—</span>`;
+    const endDisp   = ends.length   ? `<span class="mono" style="font-size:12px;">${fmtDate(ends[ends.length-1])}</span>`
+                                    : `<span style="color:var(--text-3);">—</span>`;
+    const rateDisp  = rateVal != null ? `<span class="mono">$${parseFloat(rateVal).toFixed(2)}/hr</span>`
+                                      : `<span style="color:var(--text-3);">—</span>`;
+    const cycColor  = assignedCount === totalCycles ? 'var(--success)' : 'var(--warning)';
+    const cycBg     = assignedCount === totalCycles ? 'var(--success-light)' : 'var(--warning-light)';
+    const rowOpacity = isEnded ? 'opacity:0.65;' : '';
+
+    return `<tr style="${rowOpacity}">
+      <td>
+        <strong>${cons?.name || cid}</strong>
+        <br><span style="font-size:11px;color:var(--text-3);">${cons?.email || ''}</span>
+      </td>
+      <td>${rateDisp}</td>
+      <td>${startDisp}</td>
+      <td>${endDisp}</td>
+      <td><span class="badge" style="background:${statusBg};color:${statusColor};">${statusLabel}</span></td>
+      <td>
+        <button class="btn btn-secondary btn-xs" onclick="openConsultantCyclesModal('${cid}')" style="font-size:11px;">
+          <span class="badge" style="background:${cycBg};color:${cycColor};margin-right:4px;">${assignedCount}/${totalCycles}</span>
+          Billing Cycles
+        </button>
+      </td>
+      <td>
+        <button class="btn btn-secondary btn-xs" onclick="openEditConsModal('${cid}')">Edit</button>
+      </td>
     </tr>`;
   }).join('');
 }
 
-function selectAllConsultants(checked) {
-  document.querySelectorAll('.asgn-chk').forEach(c => c.checked = checked);
-  document.getElementById('select-all-chk').checked = checked;
+
+// ── Billing Cycles Modal ──────────────────────────────────────
+function openConsultantCyclesModal(consultantId) {
+  _ccConsultantId = consultantId;
+  const cons = _consultants.find(c => c.id === consultantId);
+  const cli  = _clients.find(c => c.id === _currentAsgnClientId);
+
+  document.getElementById('cc-title').textContent = `Billing Cycles — ${cons?.name || ''}`;
+  document.getElementById('cc-subtitle').textContent = `Client: ${cli?.name || ''}`;
+
+  const myAsgns = _currentAsgnData.filter(a => a.consultant_id === consultantId);
+  const assignedIds = new Set(myAsgns.map(a => a.billing_cycle_id));
+
+  // Get consultant end_date to auto-disable cycles after it
+  const ends   = myAsgns.map(a => a.end_date).filter(Boolean).sort();
+  const endDate = ends.length ? ends[ends.length - 1] : null;
+
+  const today = new Date().toISOString().split('T')[0];
+  const list  = document.getElementById('cc-cycle-list');
+
+  list.innerHTML = _currentAsgnCycles.map(c => {
+    const status = c.end_date < today ? 'ended' : (c.start_date <= today ? 'active' : 'upcoming');
+    const statusColor = status === 'ended' ? 'var(--warning)' : status === 'active' ? 'var(--success)' : 'var(--brand)';
+    const checked  = assignedIds.has(c.id);
+    // Disable (but still show) cycles that start after consultant's end date
+    const disabled = endDate && c.start_date > endDate;
+
+    return `<label style="display:flex;align-items:center;gap:10px;padding:10px 20px;
+        cursor:${disabled ? 'not-allowed' : 'pointer'};border-bottom:1px solid var(--border);
+        opacity:${disabled ? '0.45' : '1'};"
+        onmouseover="if(!${disabled})this.style.background='var(--surface-2)'"
+        onmouseout="this.style.background=''">
+      <input type="checkbox" class="cc-chk" data-id="${c.id}"
+        ${checked ? 'checked' : ''} ${disabled ? 'disabled title="After consultant end date"' : ''}
+        style="accent-color:var(--brand);width:15px;height:15px;flex-shrink:0;">
+      <span style="flex:1;">
+        <span class="mono" style="font-size:12px;font-weight:600;">${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}</span>
+        ${c.label ? `<span style="color:var(--text-3);font-size:11px;margin-left:6px;">${c.label}</span>` : ''}
+        <span style="margin-left:6px;font-size:10px;font-weight:700;color:${statusColor};text-transform:uppercase;">${status}</span>
+        ${disabled ? '<span style="font-size:10px;color:var(--warning);margin-left:6px;">⚠ after end date</span>' : ''}
+      </span>
+    </label>`;
+  }).join('');
+
+  openModal('cons-cycles-modal');
 }
 
-async function bulkAssign() {
-  const cycleIds = getSelectedCycleIds();
-  const clientId = document.getElementById('asgn-client').value;
-  if (cycleIds.length === 0) { toast('Select at least one billing cycle', 'error'); return; }
-  const checked = [...document.querySelectorAll('.asgn-chk:checked')].map(c=>c.dataset.id);
-  if (checked.length === 0) { toast('Select at least one consultant', 'error'); return; }
+function ccSelectAll(checked) {
+  document.querySelectorAll('.cc-chk:not([disabled])').forEach(c => c.checked = checked);
+}
 
-  // Pre-fetch existing assignments for all selected cycles at once
-  const { data: allExisting } = await sb.from('consultant_billing_cycles').select('consultant_id,billing_cycle_id').in('billing_cycle_id', cycleIds);
-  const existingSet = new Set((allExisting||[]).map(e=>`${e.consultant_id}__${e.billing_cycle_id}`));
+async function saveCycleAssignments() {
+  const consultantId = _ccConsultantId;
+  if (!consultantId) return;
 
-  // Sort selected cycles by start_date
-  const selectedCycleObjs = cycleIds.map(id => _cycles.find(c=>c.id===id)).filter(Boolean).sort((a,b)=>a.start_date.localeCompare(b.start_date));
+  const myAsgns   = _currentAsgnData.filter(a => a.consultant_id === consultantId);
+  const currentlyAssigned = new Set(myAsgns.map(a => a.billing_cycle_id));
 
-  let assignedCount = 0;
+  // Get rate and start/end from existing records
+  const rateVal  = myAsgns.map(a => a.billing_rate).find(r => r != null) ?? null;
+  const starts   = myAsgns.map(a => a.start_date).filter(Boolean).sort();
+  const ends     = myAsgns.map(a => a.end_date).filter(Boolean).sort();
+  const startDate = starts.length ? starts[0] : null;
+  const endDate   = ends.length   ? ends[ends.length - 1] : null;
 
-  for (const cId of checked) {
-    // Parse rate as float — null if empty/invalid so Supabase stores NULL not empty string
-    const rateRaw = document.getElementById(`rate-${cId}`)?.value;
-    const rate = (rateRaw !== '' && rateRaw != null && !isNaN(parseFloat(rateRaw)))
-      ? parseFloat(rateRaw)
-      : null;
-    const sdate = document.getElementById(`sdate-${cId}`)?.value || null;
-    const edate = document.getElementById(`edate-${cId}`)?.value || null;
+  // Read checkboxes
+  const nowChecked = new Set(
+    [...document.querySelectorAll('.cc-chk:checked')].map(c => c.dataset.id)
+  );
 
-    // Determine which cycles this consultant actually applies to based on their start/end dates
-    // No sdate/edate = all selected cycles apply
-    const applicableCycles = selectedCycleObjs.filter(cycle => {
-      if (sdate && cycle.end_date < sdate) return false;  // cycle ended before consultant started
-      if (edate && cycle.start_date > edate) return false; // cycle starts after consultant ended
-      return true;
-    });
+  const toAssign   = [...nowChecked].filter(id => !currentlyAssigned.has(id));
+  const toUnassign = [...currentlyAssigned].filter(id => !nowChecked.has(id));
 
-    if (applicableCycles.length === 0) continue;
-
-    const toInsert = [];
-    const toUpdate = [];
-
-    for (const cycle of applicableCycles) {
-      // Only store start_date on the first applicable cycle row, end_date on the last
-      const isFirst = cycle.id === applicableCycles[0].id;
-      const isLast  = cycle.id === applicableCycles[applicableCycles.length - 1].id;
-      const rowStart = (sdate && isFirst) ? sdate : null;
-      const rowEnd   = (edate && isLast)  ? edate : null;
-
-      const key = `${cId}__${cycle.id}`;
-      if (existingSet.has(key)) {
-        toUpdate.push({ consultant_id:cId, billing_cycle_id:cycle.id, billing_rate:rate, start_date:rowStart, end_date:rowEnd });
-      } else {
-        toInsert.push({ consultant_id:cId, billing_cycle_id:cycle.id, billing_rate:rate, start_date:rowStart, end_date:rowEnd });
-      }
-    }
-
-    await sb.from('consultant_client_rates').upsert({ consultant_id:cId, client_id:clientId, billing_rate:rate }, { onConflict:'consultant_id,client_id' });
-    if (toInsert.length) await sb.from('consultant_billing_cycles').insert(toInsert);
-    for (const u of toUpdate) {
-      await sb.from('consultant_billing_cycles')
-        .update({ billing_rate:u.billing_rate, start_date:u.start_date, end_date:u.end_date })
-        .eq('consultant_id', u.consultant_id)
-        .eq('billing_cycle_id', u.billing_cycle_id);
-    }
-
-    // ── KEY FIX: sync billing_rate to any existing pending invoices for this consultant ──
-    // If a pending invoice was already auto-generated with null rate, update it now.
-    if (rate !== null) {
-      for (const cycle of applicableCycles) {
-        await sb.from('invoices')
-          .update({ billing_rate: rate })
-          .eq('consultant_id', cId)
-          .eq('billing_cycle_id', cycle.id)
-          .eq('status', 'pending');
-      }
-    }
-
-    assignedCount++;
+  // Assign new cycles
+  if (toAssign.length) {
+    const rows = toAssign.map(cycId => ({
+      consultant_id: consultantId,
+      billing_cycle_id: cycId,
+      billing_rate: rateVal,
+      start_date: startDate,
+      end_date: endDate
+    }));
+    const { error } = await sb.from('consultant_billing_cycles').insert(rows);
+    if (error) { toast('Error assigning cycles: ' + error.message, 'error'); return; }
   }
 
-  // Generate pending invoices for any newly assigned ended-cycle consultants
+  // Unassign unchecked cycles
+  for (const cycId of toUnassign) {
+    await sb.from('consultant_billing_cycles')
+      .delete().eq('consultant_id', consultantId).eq('billing_cycle_id', cycId);
+    await sb.from('invoices')
+      .delete().eq('consultant_id', consultantId).eq('billing_cycle_id', cycId).eq('status', 'pending');
+  }
+
+  const changed = toAssign.length + toUnassign.length;
+  toast(`${toAssign.length} cycle(s) assigned, ${toUnassign.length} removed`);
+  closeModal('cons-cycles-modal');
+
+  if (changed) {
+    await fetchAssignments();
+    await autoGeneratePending();
+    await fetchPendingInvoices();
+    loadDashboard();
+    await loadAssignments();
+  }
+}
+
+// ── Edit consultant assignment (rate + dates) ─────────────────
+function openEditConsModal(consultantId) {
+  const myAsgns = _currentAsgnData.filter(a => a.consultant_id === consultantId);
+  if (!myAsgns.length) return;
+  const cons = _consultants.find(c => c.id === consultantId);
+
+  const rateVal   = myAsgns.map(a => a.billing_rate).find(r => r != null) ?? null;
+  const starts    = myAsgns.map(a => a.start_date).filter(Boolean).sort();
+  const ends      = myAsgns.map(a => a.end_date).filter(Boolean).sort();
+
+  // Store consultantId in the hidden field (no cycle — applies to all cycles)
+  document.getElementById('ea-id').value = JSON.stringify({ consultant_id: consultantId, billing_cycle_id: null });
+  document.getElementById('ea-desc').textContent =
+    `${cons?.name || ''} · All cycles for this client`;
+  document.getElementById('ea-rate').value  = rateVal != null ? parseFloat(rateVal) : '';
+  document.getElementById('ea-start').value = starts.length ? starts[0] : '';
+  document.getElementById('ea-end').value   = ends.length   ? ends[ends.length-1] : '';
+  openModal('edit-asgn-modal');
+}
+
+async function saveAssignment() {
+  const idRaw  = document.getElementById('ea-id').value;
+  const rateRaw = document.getElementById('ea-rate').value;
+  const rate   = (rateRaw !== '' && !isNaN(parseFloat(rateRaw))) ? parseFloat(rateRaw) : null;
+  const start  = document.getElementById('ea-start').value || null;
+  const end    = document.getElementById('ea-end').value   || null;
+
+  if (!idRaw) { toast('No assignment selected', 'error'); return; }
+  const { consultant_id, billing_cycle_id } = JSON.parse(idRaw);
+
+  const myAsgns = billing_cycle_id
+    ? _currentAsgnData.filter(a => a.consultant_id === consultant_id && a.billing_cycle_id === billing_cycle_id)
+    : _currentAsgnData.filter(a => a.consultant_id === consultant_id);
+
+  if (myAsgns.length === 0) {
+    toast('No assignment data loaded — please reload assignments first', 'error');
+    return;
+  }
+
+  let updateErrors = [];
+  let updatedCount = 0;
+  let removedCount = 0;
+  let restoredCount = 0;
+
+  for (const a of myAsgns) {
+    const cyc = _cycles.find(c => c.id === a.billing_cycle_id);
+
+    // ── START DATE: cycle ended before consultant started → DELETE record
+    // (consultant was not with this client during that cycle)
+    if (start && cyc && cyc.end_date < start) {
+      const { error: delErr } = await sb.from('consultant_billing_cycles')
+        .delete().eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id);
+      if (delErr) { updateErrors.push(delErr.message); continue; }
+      await sb.from('invoices')
+        .delete().eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id).eq('status','pending');
+      removedCount++;
+      continue;
+    }
+
+    // ── Update the record
+    const { error: updErr } = await sb.from('consultant_billing_cycles')
+      .update({ billing_rate: rate, start_date: start, end_date: end })
+      .eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id);
+    if (updErr) { updateErrors.push(updErr.message); continue; }
+
+    // ── END DATE: cycle starts after consultant's end → remove pending invoice only
+    // (keep the record so consultant stays visible in Show Ended)
+    if (end && cyc && cyc.start_date > end) {
+      await sb.from('invoices')
+        .delete().eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id).eq('status','pending');
+    } else if (rate !== null) {
+      await sb.from('invoices')
+        .update({ billing_rate: rate })
+        .eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id).eq('status','pending');
+    }
+    updatedCount++;
+  }
+
+  // ── Restore: re-add missing cycles when start/end dates are cleared
+  if (!billing_cycle_id) {
+    const assignedCycleIds = new Set(
+      myAsgns.filter((_, i) => i < myAsgns.length).map(a => a.billing_cycle_id)
+    );
+    // Cycles that remain assigned after above loop
+    const stillAssigned = new Set(
+      myAsgns
+        .filter(a => { const cyc = _cycles.find(c => c.id === a.billing_cycle_id); return !(start && cyc && cyc.end_date < start); })
+        .map(a => a.billing_cycle_id)
+    );
+    const missingCycles = _currentAsgnCycles.filter(c =>
+      !stillAssigned.has(c.id) &&
+      !(start && c.end_date < start) &&     // would be removed by start rule
+      !(end && c.start_date > end)          // skip post-end cycles
+    );
+    if (!start && !end && missingCycles.length > 0) {
+      // Only auto-restore if BOTH dates were cleared (full reset)
+      const rows = missingCycles.map(c => ({
+        consultant_id, billing_cycle_id: c.id,
+        billing_rate: rate, start_date: null, end_date: null
+      }));
+      const { error: insErr } = await sb.from('consultant_billing_cycles').insert(rows);
+      if (insErr) updateErrors.push('Restore failed: ' + insErr.message);
+      else restoredCount = missingCycles.length;
+    }
+  }
+
+  if (updateErrors.length) {
+    toast(`Error: ${updateErrors[0]}`, 'error');
+    return;
+  }
+
+  const msg = [
+    updatedCount  ? `${updatedCount} cycle(s) updated` : '',
+    removedCount  ? `${removedCount} pre-start cycle(s) removed` : '',
+    restoredCount ? `${restoredCount} cycle(s) restored` : ''
+  ].filter(Boolean).join(', ');
+  toast(msg || 'Assignment updated');
+
+  closeModal('edit-asgn-modal');
+  await fetchAssignments();
+  await fetchPendingInvoices();
+  loadDashboard();
+  await loadAssignments();
+}
+
+
+async function deleteAssignment() {
+  const idRaw = document.getElementById('ea-id').value;
+  if (!idRaw) return;
+  const { consultant_id } = JSON.parse(idRaw);
+  const cons = _consultants.find(c => c.id === consultant_id)?.name || 'this consultant';
+  if (!confirm(`Remove ALL assignments for ${cons} from this client? Associated pending invoices will also be removed.`)) return;
+
+  const myAsgns = _currentAsgnData.filter(a => a.consultant_id === consultant_id);
+  for (const a of myAsgns) {
+    await sb.from('consultant_billing_cycles')
+      .delete().eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id);
+    await sb.from('invoices')
+      .delete().eq('consultant_id', consultant_id).eq('billing_cycle_id', a.billing_cycle_id).eq('status','pending');
+  }
+  toast('All assignments removed for ' + cons);
+  closeModal('edit-asgn-modal');
+  await fetchAssignments();
+  await fetchPendingInvoices();
+  loadDashboard();
+  await loadAssignments();
+}
+
+// Legacy stubs
+function getSelectedCycleIds() { return []; }
+function selectAllCycles() {}
+function selectAllConsultants() {}
+async function bulkAssign() {}
+async function bulkUnassign() {}
+function openNewAssignmentModal() { openNewAsgnModal(); }
+function openEditAsgnModal(cid, cycId) { openEditConsModal(cid); }
+
+// ── New Assignment ────────────────────────────────────────────
+function openNewAsgnModal() {
+  if (!_currentAsgnClientId) { toast('Load a client first', 'error'); return; }
+  const cli = _clients.find(c => c.id === _currentAsgnClientId);
+
+  // Populate consultant dropdown — exclude already-assigned ones
+  const assignedIds = new Set(_currentAsgnData.map(a => a.consultant_id));
+  const sel = document.getElementById('na-consultant');
+  sel.innerHTML = '<option value="">&#8212; Select Consultant &#8212;</option>' +
+    _consultants
+      .filter(c => !assignedIds.has(c.id))
+      .map(c => `<option value="${c.id}">${c.name}${c.email ? ' — ' + c.email : ''}</option>`)
+      .join('');
+
+  document.getElementById('na-subtitle').textContent = `Client: ${cli?.name || ''} · ${_currentAsgnCycles.length} cycle(s)`;
+  document.getElementById('na-rate').value  = '';
+  document.getElementById('na-start').value = '';
+  document.getElementById('na-end').value   = '';
+  openModal('new-asgn-modal');
+}
+
+async function saveNewAssignment() {
+  const consultantId = document.getElementById('na-consultant').value;
+  const rateRaw      = document.getElementById('na-rate').value;
+  const start        = document.getElementById('na-start').value || null;
+  const end          = document.getElementById('na-end').value   || null;
+
+  if (!consultantId) { toast('Select a consultant', 'error'); return; }
+  if (!rateRaw)      { toast('Enter a billing rate', 'error'); return; }
+  if (!start)        { toast('Enter a start date', 'error'); return; }
+  const rate = parseFloat(rateRaw);
+  if (isNaN(rate))   { toast('Invalid billing rate', 'error'); return; }
+
+  // Find all client cycles that overlap with [start, end]
+  const targetCycles = _currentAsgnCycles.filter(c => {
+    if (c.end_date < start) return false;           // cycle ended before start
+    if (end && c.start_date > end) return false;    // cycle starts after end
+    return true;
+  });
+
+  if (targetCycles.length === 0) {
+    toast('No billing cycles found in this date range', 'error'); return;
+  }
+
+  const rows = targetCycles.map(c => ({
+    consultant_id: consultantId,
+    billing_cycle_id: c.id,
+    billing_rate: rate,
+    start_date: start,
+    end_date: end || null
+  }));
+
+  const { error } = await sb.from('consultant_billing_cycles').insert(rows);
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+
+  const cons = _consultants.find(c => c.id === consultantId);
+  toast(`${cons?.name || 'Consultant'} assigned to ${targetCycles.length} cycle(s)`);
+  closeModal('new-asgn-modal');
   await fetchAssignments();
   await autoGeneratePending();
   await fetchPendingInvoices();
   loadDashboard();
-
-  toast(`${assignedCount} consultant(s) assigned — rates synced to pending invoices`);
-  loadAssignments();
-}
-
-async function bulkUnassign() {
-  const cycleIds = getSelectedCycleIds();
-  if (cycleIds.length === 0) { toast('Select at least one billing cycle', 'error'); return; }
-  const checked = [...document.querySelectorAll('.asgn-chk:checked')].map(c=>c.dataset.id);
-  if (checked.length === 0) { toast('Select consultants to unassign', 'error'); return; }
-  if (!confirm(`Unassign ${checked.length} consultant(s) from applicable cycle(s)?`)) return;
-
-  // Sort selected cycles by start_date
-  const selectedCycleObjs = cycleIds.map(id => _cycles.find(c=>c.id===id)).filter(Boolean).sort((a,b)=>a.start_date.localeCompare(b.start_date));
-
-  let unassignedCount = 0;
-  for (const cId of checked) {
-    const edate = document.getElementById(`edate-${cId}`)?.value || null;
-
-    // Determine which cycles to unassign:
-    // If edate is set, only unassign cycles that START AFTER the end date.
-    // Cycles where start_date <= edate remain assigned (the consultant covers those).
-    // If no edate, unassign all selected cycles.
-    const cyclesToUnassign = selectedCycleObjs.filter(cycle => {
-      if (edate && cycle.start_date <= edate) return false; // cycle is covered by consultant's end date — keep
-      return true; // no end date or cycle starts after end date — unassign
-    });
-
-    for (const cycle of cyclesToUnassign) {
-      await sb.from('consultant_billing_cycles').delete().eq('consultant_id', cId).eq('billing_cycle_id', cycle.id);
-      await sb.from('invoices').delete().eq('consultant_id', cId).eq('billing_cycle_id', cycle.id).eq('status', 'pending');
-      unassignedCount++;
-    }
-  }
-  toast(`Unassigned ${checked.length} consultant(s) from ${unassignedCount} cycle assignment(s)`);
-  await fetchAssignments();
-  loadAssignments();
+  await loadAssignments();
 }
 
 // ============================================================
@@ -2029,6 +2645,8 @@ async function saveBulkCycles() {
   const toInsert = valid.map(c=>({ client_id: clientId, cycle_type: 'custom', start_date: c.start_date, end_date: c.end_date, label: label||null }));
   const { error } = await sb.from('billing_cycles').insert(toInsert);
   if (error) { toast('Error: ' + error.message, 'error'); return; }
+  // Auto-extend assignments to new cycles
+  await autoExtendAssignmentsToNewCycles(clientId, toInsert.map(c => c.start_date));
   closeModal('bulk-cycle-modal');
   toast(`${valid.length} billing cycle(s) added`);
   await loadAllData();
@@ -2114,7 +2732,413 @@ async function loadAllData() {
   await autoGeneratePending();
   await fetchPendingInvoices();
   populateFilterDropdowns();
+  populateTsDropdowns();
   loadDashboard();
+}
+
+// ============================================================
+//  TIMESHEET MODULE
+// ============================================================
+let _timesheets = [];
+
+async function fetchTimesheets() {
+  const { data } = await sb.from('timesheets').select('*').order('week_ending', { ascending: false });
+  _timesheets = data || [];
+}
+
+// Snap any date to the nearest upcoming Friday (or same day if Friday)
+function snapToFriday(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay(); // 0=Sun,1=Mon,...,5=Fri,6=Sat
+  const diff = day <= 5 ? 5 - day : 6; // days until Friday
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().split('T')[0];
+}
+
+// Get all Fridays (week-ending dates) that fall within a billing cycle
+function getFridaysInCycle(cycleStart, cycleEnd) {
+  const fridays = [];
+  const start = new Date(cycleStart + 'T00:00:00');
+  const end   = new Date(cycleEnd   + 'T00:00:00');
+  // Find first Friday >= start
+  let cur = new Date(start);
+  const day = cur.getDay();
+  const toFri = day <= 5 ? 5 - day : 6;
+  cur.setDate(cur.getDate() + toFri);
+  while (cur <= end) {
+    fridays.push(cur.toISOString().split('T')[0]);
+    cur = new Date(cur);
+    cur.setDate(cur.getDate() + 7);
+  }
+  return fridays;
+}
+
+function switchTsTab(tab) {
+  const isEntry = tab === 'entry';
+  document.getElementById('ts-pane-entry').style.display = isEntry ? '' : 'none';
+  document.getElementById('ts-pane-all').style.display   = isEntry ? 'none' : '';
+  document.getElementById('ts-tab-entry').style.borderBottomColor = isEntry ? 'var(--brand)' : 'transparent';
+  document.getElementById('ts-tab-entry').style.color = isEntry ? 'var(--brand)' : 'var(--text-2)';
+  document.getElementById('ts-tab-all').style.borderBottomColor = isEntry ? 'transparent' : 'var(--brand)';
+  document.getElementById('ts-tab-all').style.color = isEntry ? 'var(--text-2)' : 'var(--brand)';
+  if (!isEntry) loadAllTimesheets();
+}
+
+function populateTsDropdowns() {
+  // Entry form
+  const tsCons = document.getElementById('ts-consultant');
+  if (tsCons) {
+    const cur = tsCons.value;
+    tsCons.innerHTML = '<option value="">-- Select --</option>' + _consultants.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    tsCons.value = cur;
+  }
+  const tsCli = document.getElementById('ts-client');
+  if (tsCli) {
+    const cur = tsCli.value;
+    tsCli.innerHTML = '<option value="">-- Select --</option>' + _clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    tsCli.value = cur;
+  }
+  // Filter dropdowns (All Timesheets tab)
+  ['tsf-consultant'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cur = el.value;
+    el.innerHTML = '<option value="">All Consultants</option>' + _consultants.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    el.value = cur;
+  });
+  ['tsf-client'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cur = el.value;
+    el.innerHTML = '<option value="">All Clients</option>' + _clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    el.value = cur;
+  });
+  const tsfCyc = document.getElementById('tsf-cycle');
+  if (tsfCyc) {
+    const cur = tsfCyc.value;
+    tsfCyc.innerHTML = '<option value="">All Cycles</option>' + _cycles.map(c => `<option value="${c.id}">${fmtDate(c.start_date)} - ${fmtDate(c.end_date)}${c.label?' ('+c.label+')':''}</option>`).join('');
+    tsfCyc.value = cur;
+  }
+}
+
+async function loadTimesheets() {
+  await fetchTimesheets();
+  populateTsDropdowns();
+  // Default week ending to next Friday
+  const we = document.getElementById('ts-week-ending');
+  if (we && !we.value) we.value = snapToFriday(new Date().toISOString().split('T')[0]);
+  updateMissingTsBadge();
+}
+
+function onTsConsultantChange() {
+  // Auto-filter client dropdown to only clients this consultant is assigned to
+  const consId = document.getElementById('ts-consultant').value;
+  const tsCli = document.getElementById('ts-client');
+  if (!consId) { tsCli.innerHTML = '<option value="">-- Select --</option>' + _clients.map(c => `<option value="${c.id}">${c.name}</option>`).join(''); return; }
+  const clientIds = [...new Set(_assignments.filter(a => a.consultant_id === consId).map(a => { const cyc = _cycles.find(c => c.id === a.billing_cycle_id); return cyc?.client_id; }).filter(Boolean))];
+  tsCli.innerHTML = '<option value="">-- Select --</option>' + _clients.filter(c => clientIds.includes(c.id)).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  document.getElementById('ts-cycle').innerHTML = '<option value="">-- Select Client First --</option>';
+  document.getElementById('ts-cycle-preview-card').style.display = 'none';
+}
+
+function onTsClientChange() {
+  // Just reset the detected cycle display when client changes
+  document.getElementById('ts-cycle').value = '';
+  document.getElementById('ts-cycle-detected').textContent = 'Select week ending to auto-detect cycle';
+  document.getElementById('ts-cycle-detected').style.color = 'var(--text-3)';
+  document.getElementById('ts-cycle-preview-card').style.display = 'none';
+  // Re-run week detection if week is already set
+  if (document.getElementById('ts-week-ending').value) onTsWeekEndingChange();
+}
+
+function onTsCycleChange() {
+  renderTsCycleCoverage();
+  onTsWeekEndingChange();
+}
+
+function onTsWeekEndingChange() {
+  const el = document.getElementById('ts-week-ending');
+  if (!el.value) return;
+  // Snap to Friday
+  const snapped = snapToFriday(el.value);
+  if (snapped !== el.value) el.value = snapped;
+  const we = el.value;
+
+  // Auto-detect billing cycle: find the cycle (for this client) whose date range contains this week
+  const clientId = document.getElementById('ts-client').value;
+  const consId   = document.getElementById('ts-consultant').value;
+  const detectedEl = document.getElementById('ts-cycle-detected');
+  const cycHidden  = document.getElementById('ts-cycle');
+  const warn = document.getElementById('ts-cycle-warning');
+
+  // The week spans Sat (6 days before the Friday) through Friday
+  const weekStart = new Date(we + 'T00:00:00');
+  weekStart.setDate(weekStart.getDate() - 6);
+  const weekStartStr = weekStart.toISOString().split('T')[0];
+
+  // Filter cycles by client if selected; prefer assigned cycles for this consultant
+  let candidateCycles = clientId ? _cycles.filter(c => c.client_id === clientId) : _cycles;
+  if (consId) {
+    const assignedIds = _assignments.filter(a => a.consultant_id === consId).map(a => a.billing_cycle_id);
+    const assignedMatches = candidateCycles.filter(c => assignedIds.includes(c.id));
+    if (assignedMatches.length) candidateCycles = assignedMatches;
+  }
+
+  // Find cycle where the Friday (week_ending) falls within start_date..end_date
+  const matched = candidateCycles.find(c => we >= c.start_date && we <= c.end_date)
+    || candidateCycles.find(c => weekStartStr >= c.start_date && weekStartStr <= c.end_date);
+
+  if (matched) {
+    cycHidden.value = matched.id;
+    const cli = _clients.find(c => c.id === matched.client_id);
+    detectedEl.innerHTML = `<span style="color:var(--text);font-weight:600;">${fmtDate(matched.start_date)} &rarr; ${fmtDate(matched.end_date)}</span>${matched.label ? ' &nbsp;<span style="color:var(--text-3);">('+matched.label+')</span>' : ''}${cli ? ' &nbsp;&mdash;&nbsp;<span style="color:var(--text-2);">'+cli.name+'</span>' : ''}`;
+    detectedEl.style.border = '1px solid var(--success)';
+    detectedEl.style.background = 'var(--success-light)';
+    warn.style.display = 'none';
+    // If client wasn't selected, auto-fill it
+    if (!clientId && matched.client_id) {
+      document.getElementById('ts-client').value = matched.client_id;
+    }
+    renderTsCycleCoverage();
+    loadExistingTsEntry();
+  } else {
+    cycHidden.value = '';
+    detectedEl.textContent = 'No billing cycle found for this week';
+    detectedEl.style.border = '1px solid var(--danger)';
+    detectedEl.style.background = 'var(--danger-light)';
+    detectedEl.style.color = 'var(--danger)';
+    warn.style.display = '';
+    document.getElementById('ts-cycle-preview-card').style.display = 'none';
+  }
+}
+
+async function loadExistingTsEntry() {
+  const consId = document.getElementById('ts-consultant').value;
+  const cycId  = document.getElementById('ts-cycle').value;
+  const we     = document.getElementById('ts-week-ending').value;
+  if (!consId || !cycId || !we) return;
+  const existing = _timesheets.find(t => t.consultant_id === consId && t.billing_cycle_id === cycId && t.week_ending === we);
+  if (existing) {
+    document.getElementById('ts-edit-id').value = existing.id;
+    document.getElementById('ts-sat').value = existing.sat_hours || 0;
+    document.getElementById('ts-sun').value = existing.sun_hours || 0;
+    document.getElementById('ts-mon').value = existing.mon_hours || 0;
+    document.getElementById('ts-tue').value = existing.tue_hours || 0;
+    document.getElementById('ts-wed').value = existing.wed_hours || 0;
+    document.getElementById('ts-thu').value = existing.thu_hours || 0;
+    document.getElementById('ts-fri').value = existing.fri_hours || 0;
+    document.getElementById('ts-notes').value = existing.notes || '';
+  } else {
+    document.getElementById('ts-edit-id').value = '';
+    ['sat','sun','mon','tue','wed','thu','fri'].forEach(d => document.getElementById('ts-'+d).value = 0);
+    document.getElementById('ts-notes').value = '';
+  }
+  updateTsTotal();
+}
+
+function updateTsTotal() {
+  const days = ['sat','sun','mon','tue','wed','thu','fri'];
+  const total = days.reduce((sum, d) => sum + (parseFloat(document.getElementById('ts-'+d).value) || 0), 0);
+  document.getElementById('ts-total-display').textContent = total % 1 === 0 ? total : total.toFixed(1);
+}
+
+function clearTsForm() {
+  document.getElementById('ts-edit-id').value = '';
+  ['sat','sun','mon','tue','wed','thu','fri'].forEach(d => document.getElementById('ts-'+d).value = 0);
+  document.getElementById('ts-notes').value = '';
+  document.getElementById('ts-week-ending').value = snapToFriday(new Date().toISOString().split('T')[0]);
+  document.getElementById('ts-cycle').value = '';
+  const det = document.getElementById('ts-cycle-detected');
+  det.textContent = 'Select consultant, client and week ending first';
+  det.style.border = '1px solid var(--border)';
+  det.style.background = 'var(--surface-2)';
+  det.style.color = 'var(--text-3)';
+  document.getElementById('ts-cycle-warning').style.display = 'none';
+  document.getElementById('ts-cycle-preview-card').style.display = 'none';
+  updateTsTotal();
+}
+
+async function saveTimesheet() {
+  const consId  = document.getElementById('ts-consultant').value;
+  const clientId = document.getElementById('ts-client').value;
+  const cycId   = document.getElementById('ts-cycle').value;
+  const we      = document.getElementById('ts-week-ending').value;
+  if (!consId || !cycId || !we) { toast('Select consultant, billing cycle, and week ending', 'error'); return; }
+  const days = ['sat','sun','mon','tue','wed','thu','fri'];
+  const payload = {
+    consultant_id: consId,
+    billing_cycle_id: cycId,
+    client_id: clientId || _cycles.find(c => c.id === cycId)?.client_id,
+    week_ending: we,
+    notes: document.getElementById('ts-notes').value || null
+  };
+  days.forEach(d => { payload[d + '_hours'] = parseFloat(document.getElementById('ts-'+d).value) || 0; });
+  const editId = document.getElementById('ts-edit-id').value;
+  let err;
+  if (editId) {
+    ({ error: err } = await sb.from('timesheets').update(payload).eq('id', editId));
+  } else {
+    ({ error: err } = await sb.from('timesheets').upsert(payload, { onConflict: 'consultant_id,billing_cycle_id,week_ending' }));
+  }
+  if (err) { toast('Error saving timesheet: ' + err.message, 'error'); return; }
+  toast('Timesheet saved!');
+  await fetchTimesheets();
+  renderTsCycleCoverage();
+  updateMissingTsBadge();
+}
+
+async function renderTsCycleCoverage() {
+  const cycId  = document.getElementById('ts-cycle').value;
+  const consId = document.getElementById('ts-consultant').value;
+  const card   = document.getElementById('ts-cycle-preview-card');
+  if (!cycId || !consId) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const cyc = _cycles.find(c => c.id === cycId);
+  if (!cyc) return;
+  const fridays = getFridaysInCycle(cyc.start_date, cyc.end_date);
+  const submitted = _timesheets.filter(t => t.consultant_id === consId && t.billing_cycle_id === cycId).map(t => t.week_ending);
+  const pct = fridays.length ? Math.round((submitted.length / fridays.length) * 100) : 0;
+  const badge = document.getElementById('ts-coverage-badge');
+  badge.textContent = pct + '%';
+  badge.style.background = pct === 100 ? 'var(--success-light)' : pct > 0 ? 'var(--warning-light)' : 'var(--danger-light)';
+  badge.style.color = pct === 100 ? 'var(--success)' : pct > 0 ? 'var(--warning)' : 'var(--danger)';
+  const body = document.getElementById('ts-cycle-weeks-body');
+  if (fridays.length === 0) { body.innerHTML = '<div style="color:var(--text-3);padding:12px;">No complete weeks in this cycle.</div>'; return; }
+  body.innerHTML = `<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;font-size:12px;font-weight:600;color:var(--text-2);padding-bottom:6px;border-bottom:1px solid var(--border);margin-bottom:8px;"><span>Week Ending</span><span>Hours</span><span>Status</span></div>` +
+    fridays.map(fri => {
+      const ts = _timesheets.find(t => t.consultant_id === consId && t.billing_cycle_id === cycId && t.week_ending === fri);
+      const hours = ts ? ['sat','sun','mon','tue','wed','thu','fri'].reduce((s,d) => s + (parseFloat(ts[d+'_hours'])||0), 0) : null;
+      const statusIcon = ts ? `<span style="color:var(--success);font-weight:700;">&#10003;</span>` : `<span style="color:var(--danger);">&#10007;</span>`;
+      const editBtn = ts ? `<button class="btn btn-secondary btn-xs" onclick="editTsEntry('${ts.id}','${fri}')">Edit</button>` : `<button class="btn btn-xs" style="background:var(--brand-light);color:var(--brand);border:1px solid #bfdbfe;" onclick="prefillTsWeek('${fri}')">Add</button>`;
+      return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;">
+        <span class="mono">${fmtDate(fri)}</span>
+        <span class="mono" style="color:${ts?'var(--text)':'var(--text-3)'};">${hours != null ? hours+'h' : '—'}</span>
+        <div style="display:flex;gap:4px;align-items:center;">${statusIcon}&nbsp;${editBtn}</div>
+      </div>`;
+    }).join('') +
+    `<div style="padding:10px 0 2px;font-size:12px;color:var(--text-2);">Total submitted: <strong>${submitted.length}/${fridays.length}</strong> weeks &nbsp;|&nbsp; <strong>${pct}%</strong> coverage</div>`;
+}
+
+function prefillTsWeek(fri) {
+  document.getElementById('ts-week-ending').value = fri;
+  document.getElementById('ts-edit-id').value = '';
+  ['sat','sun','mon','tue','wed','thu','fri'].forEach(d => document.getElementById('ts-'+d).value = 0);
+  document.getElementById('ts-notes').value = '';
+  updateTsTotal();
+  onTsWeekEndingChange();
+}
+
+function editTsEntry(tsId, fri) {
+  const ts = _timesheets.find(t => t.id === tsId);
+  if (!ts) return;
+  document.getElementById('ts-week-ending').value = fri;
+  document.getElementById('ts-edit-id').value = tsId;
+  ['sat','sun','mon','tue','wed','thu','fri'].forEach(d => document.getElementById('ts-'+d).value = ts[d+'_hours'] || 0);
+  document.getElementById('ts-notes').value = ts.notes || '';
+  updateTsTotal();
+}
+
+async function loadAllTimesheets() {
+  await fetchTimesheets();
+  const consFilter = document.getElementById('tsf-consultant')?.value || '';
+  const cliFilter  = document.getElementById('tsf-client')?.value || '';
+  const cycFilter  = document.getElementById('tsf-cycle')?.value || '';
+  let rows = _timesheets;
+  if (consFilter) rows = rows.filter(t => t.consultant_id === consFilter);
+  if (cliFilter)  rows = rows.filter(t => t.client_id    === cliFilter);
+  if (cycFilter)  rows = rows.filter(t => t.billing_cycle_id === cycFilter);
+  const tbody = document.getElementById('all-timesheets-body');
+  if (rows.length === 0) { tbody.innerHTML = `<tr><td colspan="15" style="color:var(--text-3);text-align:center;padding:30px;">No timesheet entries found.</td></tr>`; return; }
+  tbody.innerHTML = rows.map(t => {
+    const cons  = _consultants.find(c => c.id === t.consultant_id);
+    const cli   = _clients.find(c => c.id === t.client_id);
+    const cyc   = _cycles.find(c => c.id === t.billing_cycle_id);
+    const total = ['sat','sun','mon','tue','wed','thu','fri'].reduce((s,d) => s + (parseFloat(t[d+'_hours'])||0), 0);
+    const proofCell = t.proof_url
+      ? `<a href="${t.proof_url}" target="_blank" rel="noopener"
+           style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--brand);font-weight:500;text-decoration:none;"
+           title="View proof document">
+           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M14 3v2H7v14h10v-7h2v8a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1h8zm5 0l2 2-9.5 9.5-2.5.5.5-2.5L19 3z"/></svg>
+           View Proof
+         </a>`
+      : `<span style="color:var(--text-3);font-size:11px;">—</span>`;
+    return `<tr>
+      <td><strong>${cons?.name||'—'}</strong></td>
+      <td>${cli?.name||'—'}</td>
+      <td class="mono" style="font-size:11px;">${cyc ? fmtDate(cyc.start_date)+' - '+fmtDate(cyc.end_date) : '—'}</td>
+      <td class="mono">${fmtDate(t.week_ending)}</td>
+      <td class="mono">${t.sat_hours||0}</td><td class="mono">${t.sun_hours||0}</td><td class="mono">${t.mon_hours||0}</td>
+      <td class="mono">${t.tue_hours||0}</td><td class="mono">${t.wed_hours||0}</td><td class="mono">${t.thu_hours||0}</td>
+      <td class="mono">${t.fri_hours||0}</td>
+      <td class="mono" style="font-weight:700;">${total%1===0?total:total.toFixed(1)}</td>
+      <td>${proofCell}</td>
+      <td style="font-size:11px;color:var(--text-2);">${t.notes||'—'}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn btn-secondary btn-xs" onclick="jumpToEditTs('${t.id}')">Edit</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteTs('${t.id}')">Del</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function jumpToEditTs(tsId) {
+  const ts = _timesheets.find(t => t.id === tsId);
+  if (!ts) return;
+  switchTsTab('entry');
+  document.getElementById('ts-consultant').value = ts.consultant_id;
+  onTsConsultantChange();
+  document.getElementById('ts-client').value = ts.client_id;
+  onTsClientChange();
+  setTimeout(() => {
+    document.getElementById('ts-cycle').value = ts.billing_cycle_id;
+    document.getElementById('ts-week-ending').value = ts.week_ending;
+    editTsEntry(tsId, ts.week_ending);
+    onTsCycleChange();
+  }, 50);
+}
+
+async function deleteTs(tsId) {
+  if (!confirm('Delete this timesheet entry?')) return;
+  await sb.from('timesheets').delete().eq('id', tsId);
+  toast('Timesheet deleted');
+  await fetchTimesheets();
+  loadAllTimesheets();
+  updateMissingTsBadge();
+}
+
+function clearTsFilters() {
+  document.getElementById('tsf-consultant').value = '';
+  document.getElementById('tsf-client').value = '';
+  document.getElementById('tsf-cycle').value = '';
+  loadAllTimesheets();
+}
+
+// ============================================================
+//  MISSING TIMESHEET DETECTION (US-16/17)
+// ============================================================
+function getCycleTimesheetCoverage(consultantId, cycleId) {
+  const cyc = _cycles.find(c => c.id === cycleId);
+  if (!cyc) return { pct: 0, submitted: 0, expected: 0, missing: [] };
+  const fridays  = getFridaysInCycle(cyc.start_date, cyc.end_date);
+  const submitted = _timesheets.filter(t => t.consultant_id === consultantId && t.billing_cycle_id === cycleId).map(t => t.week_ending);
+  const missing  = fridays.filter(f => !submitted.includes(f));
+  const pct = fridays.length ? Math.round((submitted.length / fridays.length) * 100) : 100;
+  return { pct, submitted: submitted.length, expected: fridays.length, missing };
+}
+
+function updateMissingTsBadge() {
+  const today = new Date().toISOString().split('T')[0];
+  // Count pending invoices (ended cycles) with incomplete coverage
+  let missingCount = 0;
+  _pendingInvoices.forEach(inv => {
+    const { pct } = getCycleTimesheetCoverage(inv.consultant_id, inv.billing_cycle_id);
+    if (pct < 100) missingCount++;
+  });
+  const badge = document.getElementById('timesheets-badge');
+  if (badge) { if (missingCount > 0) { badge.textContent = missingCount; badge.style.display = 'inline'; } else { badge.style.display = 'none'; } }
+  const stat = document.getElementById('stat-missing-ts');
+  if (stat) stat.textContent = missingCount;
 }
 </script>
 
@@ -2205,6 +3229,27 @@ CREATE POLICY "auth_all" ON consultant_billing_cycles FOR ALL TO authenticated U
 CREATE POLICY "auth_all" ON consultant_client_rates FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "auth_all" ON invoices FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "auth_all" ON settings FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- TIMESHEETS table (add this if upgrading an existing installation)
+CREATE TABLE IF NOT EXISTS timesheets (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  consultant_id UUID REFERENCES consultants(id) ON DELETE CASCADE,
+  billing_cycle_id UUID REFERENCES billing_cycles(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  week_ending DATE NOT NULL,
+  sat_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
+  sun_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
+  mon_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
+  tue_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
+  wed_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
+  thu_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
+  fri_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  submitted_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(consultant_id, billing_cycle_id, week_ending)
+);
+ALTER TABLE timesheets ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "auth_all" ON timesheets FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -->
 </body>
