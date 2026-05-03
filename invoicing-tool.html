@@ -196,6 +196,11 @@
         Pending Invoices
         <span id="pending-badge" style="margin-left:auto; background:#dc2626; color:white; border-radius:999px; font-size:10px; padding:1px 7px; display:none;">0</span>
       </div>
+      <div class="nav-link" onclick="showSection('invoiced')">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Invoiced
+        <span id="invoiced-badge" style="margin-left:auto; background:#0e7c3a; color:white; border-radius:999px; font-size:10px; padding:1px 7px; display:none;">0</span>
+      </div>
       <div class="nav-link" onclick="showSection('upcoming')">
         <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         Upcoming Cycles
@@ -285,8 +290,39 @@
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><span style="font-weight:600;">Pending Invoices</span></div>
-          <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Consultant</th><th>Client</th><th>Cycle</th><th>Period</th><th>Billing Rate</th><th>Actions</th></tr></thead><tbody id="pending-body"><tr><td colspan="6" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
+          <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="font-weight:600;">Pending Invoices</span>
+            <button class="btn btn-secondary btn-sm" onclick="exportPendingCSV()" style="display:flex;align-items:center;gap:6px;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              Export CSV
+            </button>
+          </div>
+          <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Consultant</th><th>Client</th><th>Cycle</th><th>Period</th><th>Billing Rate</th><th>Hours</th><th>Total Amount</th><th>Actions</th></tr></thead><tbody id="pending-body"><tr><td colspan="8" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- INVOICED -->
+      <div id="section-invoiced" class="section">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-body">
+            <div class="filter-bar">
+              <div class="form-group"><label class="form-label">Client</label><select id="if-client" class="form-control" onchange="loadInvoiced()"><option value="">All Clients</option></select></div>
+              <div class="form-group"><label class="form-label">Consultant</label><select id="if-consultant" class="form-control" onchange="loadInvoiced()"><option value="">All Consultants</option></select></div>
+              <div class="form-group"><label class="form-label">From Date</label><input type="date" id="if-from" class="form-control" onchange="loadInvoiced()"></div>
+              <div class="form-group"><label class="form-label">To Date</label><input type="date" id="if-to" class="form-control" onchange="loadInvoiced()"></div>
+              <div class="form-group"><label class="form-label">&nbsp;</label><button class="btn btn-secondary" onclick="clearInvoicedFilters()">Clear</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="font-weight:600;">Invoiced</span>
+            <button class="btn btn-secondary btn-sm" onclick="exportInvoicedCSV()" style="display:flex;align-items:center;gap:6px;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              Export CSV
+            </button>
+          </div>
+          <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Consultant</th><th>Client</th><th>Cycle</th><th>Period</th><th>Billing Rate</th><th>Hours</th><th>Total Amount</th><th>Invoice #</th><th>Invoice Date</th><th>Actions</th></tr></thead><tbody id="invoiced-body"><tr><td colspan="10" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
         </div>
       </div>
 
@@ -583,6 +619,48 @@
   </div>
 </div>
 
+<!-- Edit Invoiced Record Modal -->
+<div class="modal-overlay" id="edit-invoiced-modal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <h3 style="font-size:15px; font-weight:600; margin:0;">Edit Invoiced Record</h3>
+      <button class="modal-close" onclick="closeModal('edit-invoiced-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-inv-id">
+      <p style="font-size:12px; color:var(--text-2); margin-bottom:14px; padding:8px 12px; background:var(--surface-2); border-radius:6px; border-left:3px solid var(--brand);" id="edit-inv-info"></p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Billing Rate ($/hr)</label>
+          <input type="number" id="edit-inv-rate" class="form-control" placeholder="0.00" step="0.01" oninput="updateEditInvoicedTotal()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hours</label>
+          <input type="number" id="edit-inv-hours" class="form-control" placeholder="0" step="0.5" oninput="updateEditInvoicedTotal()">
+        </div>
+      </div>
+      <div class="form-group" style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:16px;">
+        <label class="form-label" style="margin-bottom:2px;">Total Amount</label>
+        <div id="edit-inv-total" style="font-size:18px; font-weight:700; color:var(--brand); font-family:'IBM Plex Mono',monospace;">—</div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Invoice Number</label>
+          <input type="text" id="edit-inv-number" class="form-control" placeholder="INV-001">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Invoice Date</label>
+          <input type="date" id="edit-inv-date" class="form-control">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('edit-invoiced-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditInvoiced()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- Assign Start Date Modal -->
 <div class="modal-overlay" id="startdate-modal">
   <div class="modal" style="max-width:460px;">
@@ -632,6 +710,17 @@ function toast(msg, type='success') {
 }
 
 // ============================================================
+//  DATE FORMAT HELPER  —  ISO → DD-MMM-YYYY
+// ============================================================
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const d = new Date(iso + 'T00:00:00');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${dd}-${months[d.getMonth()]}-${d.getFullYear()}`;
+}
+
+// ============================================================
 //  AUTH
 // ============================================================
 async function doLogin() {
@@ -672,13 +761,14 @@ function showSection(id) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
   document.getElementById(`section-${id}`).classList.add('active');
-  const titles = { dashboard:'Dashboard', pending:'Pending Invoices', upcoming:'Upcoming Cycles', consultants:'Consultants', clients:'Clients', 'billing-cycles':'Billing Cycles', assignments:'Assignments', settings:'Settings' };
+  const titles = { dashboard:'Dashboard', pending:'Pending Invoices', invoiced:'Invoiced', upcoming:'Upcoming Cycles', consultants:'Consultants', clients:'Clients', 'billing-cycles':'Billing Cycles', assignments:'Assignments', settings:'Settings' };
   document.getElementById('page-title').textContent = titles[id] || id;
   document.querySelectorAll('.nav-link').forEach(n => {
     if (n.getAttribute('onclick') === `showSection('${id}')`) n.classList.add('active');
   });
   // lazy-load sections
   if (id === 'pending') loadPending();
+  if (id === 'invoiced') loadInvoiced();
   if (id === 'upcoming') loadUpcoming();
   if (id === 'consultants') loadConsultants();
   if (id === 'clients') loadClients();
@@ -735,6 +825,12 @@ async function autoGeneratePending() {
   const { data: existing } = await sb.from('invoices').select('consultant_id,billing_cycle_id').in('status',['pending','invoiced']);
   const existingSet = new Set((existing||[]).map(e => `${e.consultant_id}__${e.billing_cycle_id}`));
 
+  // Build a rate lookup: consultant_id -> client_id -> billing_rate
+  // from consultant_billing_cycles (per-assignment rate) and consultant_client_rates (fallback)
+  const { data: clientRatesAll } = await sb.from('consultant_client_rates').select('*');
+  const clientRatesMap = {};
+  (clientRatesAll||[]).forEach(r => { clientRatesMap[`${r.consultant_id}__${r.client_id}`] = r.billing_rate; });
+
   const toInsert = [];
   for (const asgn of _assignments) {
     const cycle = _cycles.find(c => c.id === asgn.billing_cycle_id);
@@ -742,7 +838,17 @@ async function autoGeneratePending() {
     if (cycle.end_date < today) {
       const key = `${asgn.consultant_id}__${asgn.billing_cycle_id}`;
       if (!existingSet.has(key)) {
-        toInsert.push({ consultant_id: asgn.consultant_id, billing_cycle_id: asgn.billing_cycle_id, client_id: cycle.client_id, status: 'pending', billing_rate: asgn.billing_rate });
+        // Prefer the rate stored on the assignment; fall back to the consultant-client rate table
+        const rate = asgn.billing_rate != null
+          ? asgn.billing_rate
+          : (clientRatesMap[`${asgn.consultant_id}__${cycle.client_id}`] ?? null);
+        toInsert.push({
+          consultant_id: asgn.consultant_id,
+          billing_cycle_id: asgn.billing_cycle_id,
+          client_id: cycle.client_id,
+          status: 'pending',
+          billing_rate: rate
+        });
       }
     }
   }
@@ -778,7 +884,7 @@ function loadDashboard() {
       <td><strong>${cons?.name || '—'}</strong></td>
       <td>${cli?.name || '—'}</td>
       <td>${cyc?.label || cycleLabel(cyc)}</td>
-      <td class="mono" style="font-size:12px;">${cyc?.start_date || ''} → ${cyc?.end_date || ''}</td>
+      <td class="mono" style="font-size:12px;">${fmtDate(cyc?.start_date)} → ${fmtDate(cyc?.end_date)}</td>
       <td class="mono">$${inv.billing_rate || '—'}</td>
       <td><button class="btn btn-success btn-xs" onclick="openInvoiceModal('${inv.id}')">Mark Invoiced</button></td>
     </tr>`;
@@ -810,17 +916,22 @@ async function loadPending() {
   if (toFilter) rows = rows.filter(r => { const cyc = _cycles.find(c=>c.id===r.billing_cycle_id); return cyc && cyc.end_date <= toFilter; });
 
   const tbody = document.getElementById('pending-body');
-  if (rows.length === 0) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--text-3); text-align:center; padding:30px;">No pending invoices match filters</td></tr>`; return; }
+  if (rows.length === 0) { tbody.innerHTML = `<tr><td colspan="8" style="color:var(--text-3); text-align:center; padding:30px;">No pending invoices match filters</td></tr>`; return; }
   tbody.innerHTML = rows.map(inv => {
     const cons = _consultants.find(c => c.id === inv.consultant_id);
     const cli = _clients.find(c => c.id === inv.client_id);
     const cyc = _cycles.find(c => c.id === inv.billing_cycle_id);
+    const rate = parseFloat(inv.billing_rate) || 0;
+    const hours = inv.hours != null ? inv.hours : '';
+    const total = (rate && hours !== '') ? '$' + (rate * parseFloat(hours)).toFixed(2) : '—';
     return `<tr>
       <td><strong>${cons?.name || '—'}</strong></td>
       <td>${cli?.name || '—'}</td>
       <td>${cyc?.label || cycleLabel(cyc)}</td>
-      <td class="mono" style="font-size:12px;">${cyc?.start_date||''} → ${cyc?.end_date||''}</td>
+      <td class="mono" style="font-size:12px;">${fmtDate(cyc?.start_date)} → ${fmtDate(cyc?.end_date)}</td>
       <td class="mono">$${inv.billing_rate||'—'}/hr</td>
+      <td><input type="number" value="${hours}" min="0" step="0.5" style="width:80px;" class="form-control" placeholder="0" onblur="saveInvoiceHours('${inv.id}', this.value, this)" oninput="updatePendingTotal(this, ${rate})"></td>
+      <td class="mono" id="total-${inv.id}">${total}</td>
       <td style="display:flex; gap:6px;">
         <button class="btn btn-success btn-xs" onclick="openInvoiceModal('${inv.id}')">Mark Invoiced</button>
         <button class="btn btn-danger btn-xs" onclick="removePendingInvoice('${inv.id}','${inv.consultant_id}','${inv.billing_cycle_id}')">Remove</button>
@@ -837,6 +948,391 @@ function clearFilters() {
   document.getElementById('f-to').value = '';
   loadPending();
 }
+
+// ============================================================
+//  HOURS INLINE SAVE
+// ============================================================
+function updatePendingTotal(inputEl, rate) {
+  const h = parseFloat(inputEl.value);
+  // Find the total cell — it's 2 siblings forward from the input's parent td
+  const row = inputEl.closest('tr');
+  const totalCell = row ? row.querySelector('[id^="total-"]') : null;
+  if (totalCell) {
+    totalCell.textContent = (rate && !isNaN(h)) ? '$' + (rate * h).toFixed(2) : '—';
+  }
+}
+
+async function saveInvoiceHours(invId, hoursVal, inputEl) {
+  const h = hoursVal === '' ? null : parseFloat(hoursVal);
+  await sb.from('invoices').update({ hours: h }).eq('id', invId);
+  // Refresh the total cell
+  const row = inputEl ? inputEl.closest('tr') : null;
+  const totalCell = row ? row.querySelector('[id^="total-"]') : null;
+  if (totalCell) {
+    const inv = _allPendingInvoices.find(i => i.id === invId) || _pendingInvoices.find(i => i.id === invId);
+    const rate = parseFloat(inv?.billing_rate) || 0;
+    totalCell.textContent = (rate && h != null) ? '$' + (rate * h).toFixed(2) : '—';
+  }
+}
+
+// ============================================================
+//  INVOICED TAB
+// ============================================================
+async function loadInvoiced() {
+  const { data } = await sb.from('invoices').select('*').eq('status', 'invoiced').order('invoice_date', { ascending: false });
+  let rows = data || [];
+
+  const clientFilter = document.getElementById('if-client').value;
+  const consultantFilter = document.getElementById('if-consultant').value;
+  const fromFilter = document.getElementById('if-from').value;
+  const toFilter = document.getElementById('if-to').value;
+
+  if (clientFilter) rows = rows.filter(r => r.client_id === clientFilter);
+  if (consultantFilter) rows = rows.filter(r => r.consultant_id === consultantFilter);
+  if (fromFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.start_date >= fromFilter; });
+  if (toFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.end_date <= toFilter; });
+
+  // Update invoiced badge
+  const { data: allInvoiced } = await sb.from('invoices').select('id').eq('status', 'invoiced');
+  const ibadge = document.getElementById('invoiced-badge');
+  if (ibadge) { const cnt = (allInvoiced||[]).length; if (cnt > 0) { ibadge.textContent = cnt; ibadge.style.display = 'inline'; } else { ibadge.style.display = 'none'; } }
+
+  const tbody = document.getElementById('invoiced-body');
+  if (rows.length === 0) { tbody.innerHTML = `<tr><td colspan="10" style="color:var(--text-3); text-align:center; padding:30px;">No invoiced records match filters</td></tr>`; return; }
+  tbody.innerHTML = rows.map(inv => {
+    const cons = _consultants.find(c => c.id === inv.consultant_id);
+    const cli = _clients.find(c => c.id === inv.client_id);
+    const cyc = _cycles.find(c => c.id === inv.billing_cycle_id);
+    const rate = parseFloat(inv.billing_rate) || 0;
+    const hours = inv.hours != null ? inv.hours : '—';
+    const total = (rate && inv.hours != null) ? '$' + (rate * inv.hours).toFixed(2) : '—';
+    return `<tr>
+      <td><strong>${cons?.name || '—'}</strong></td>
+      <td>${cli?.name || '—'}</td>
+      <td>${cyc?.label || cycleLabel(cyc)}</td>
+      <td class="mono" style="font-size:12px;">${fmtDate(cyc?.start_date)} → ${fmtDate(cyc?.end_date)}</td>
+      <td class="mono">$${inv.billing_rate||'—'}/hr</td>
+      <td class="mono">${hours}</td>
+      <td class="mono">${total}</td>
+      <td class="mono" style="font-size:12px;">${inv.invoice_number || '—'}</td>
+      <td class="mono" style="font-size:12px;">${fmtDate(inv.invoice_date)}</td>
+      <td style="display:flex; gap:5px; align-items:center;">
+        <button class="btn btn-secondary btn-xs" title="Edit" onclick="openEditInvoicedModal('${inv.id}')" style="padding:4px 7px;">
+          <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+        </button>
+        <button class="btn btn-secondary btn-xs" onclick="undoInvoice('${inv.id}')">↩ Undo</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function clearInvoicedFilters() {
+  document.getElementById('if-client').value = '';
+  document.getElementById('if-consultant').value = '';
+  document.getElementById('if-from').value = '';
+  document.getElementById('if-to').value = '';
+  loadInvoiced();
+}
+
+async function undoInvoice(invId) {
+  if (!confirm('Undo this invoice? It will be moved back to Pending status.')) return;
+  await sb.from('invoices').update({ status: 'pending', invoice_number: null, invoice_date: null }).eq('id', invId);
+  toast('Invoice moved back to Pending.');
+  await fetchPendingInvoices();
+  loadDashboard();
+  loadInvoiced();
+}
+
+// ============================================================
+//  EDIT INVOICED RECORD
+// ============================================================
+let _editInvoicedCache = null; // holds the full invoiced data array from last loadInvoiced call
+
+function openEditInvoicedModal(invId) {
+  // Find the invoice from the DOM data — re-fetch directly from Supabase
+  sb.from('invoices').select('*').eq('id', invId).single().then(({ data: inv }) => {
+    if (!inv) { toast('Could not load invoice', 'error'); return; }
+    const cons = _consultants.find(c => c.id === inv.consultant_id);
+    const cli  = _clients.find(c => c.id === inv.client_id);
+    const cyc  = _cycles.find(c => c.id === inv.billing_cycle_id);
+
+    document.getElementById('edit-inv-id').value       = inv.id;
+    document.getElementById('edit-inv-rate').value     = inv.billing_rate ?? '';
+    document.getElementById('edit-inv-hours').value    = inv.hours ?? '';
+    document.getElementById('edit-inv-number').value   = inv.invoice_number ?? '';
+    document.getElementById('edit-inv-date').value     = inv.invoice_date ?? '';
+    document.getElementById('edit-inv-info').textContent =
+      `${cons?.name || '—'}  ·  ${cli?.name || '—'}  ·  ${cyc ? cyc.start_date + ' → ' + cyc.end_date : '—'}`;
+    updateEditInvoicedTotal();
+    openModal('edit-invoiced-modal');
+  });
+}
+
+function updateEditInvoicedTotal() {
+  const rate  = parseFloat(document.getElementById('edit-inv-rate').value);
+  const hours = parseFloat(document.getElementById('edit-inv-hours').value);
+  const el = document.getElementById('edit-inv-total');
+  if (!isNaN(rate) && !isNaN(hours)) {
+    el.textContent = '$' + (rate * hours).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    el.style.color = 'var(--brand)';
+  } else {
+    el.textContent = '—';
+    el.style.color = 'var(--text-3)';
+  }
+}
+
+async function saveEditInvoiced() {
+  const id     = document.getElementById('edit-inv-id').value;
+  const rateRaw = document.getElementById('edit-inv-rate').value;
+  const hoursRaw = document.getElementById('edit-inv-hours').value;
+  const rate   = rateRaw  !== '' && !isNaN(parseFloat(rateRaw))  ? parseFloat(rateRaw)  : null;
+  const hours  = hoursRaw !== '' && !isNaN(parseFloat(hoursRaw)) ? parseFloat(hoursRaw) : null;
+  const number = document.getElementById('edit-inv-number').value.trim() || null;
+  const date   = document.getElementById('edit-inv-date').value || null;
+
+  const { error } = await sb.from('invoices')
+    .update({ billing_rate: rate, hours, invoice_number: number, invoice_date: date })
+    .eq('id', id);
+
+  if (error) { toast('Error saving: ' + error.message, 'error'); return; }
+  toast('Invoice updated successfully!');
+  closeModal('edit-invoiced-modal');
+  loadInvoiced();
+}
+
+// ============================================================
+//  EXPORT INVOICED CSV
+// ============================================================
+async function exportInvoicedCSV() {
+  // Fetch invoiced rows respecting current filters
+  const { data } = await sb.from('invoices').select('*').eq('status', 'invoiced').order('invoice_date', { ascending: false });
+  let rows = data || [];
+
+  const clientFilter = document.getElementById('if-client').value;
+  const consultantFilter = document.getElementById('if-consultant').value;
+  const fromFilter = document.getElementById('if-from').value;
+  const toFilter = document.getElementById('if-to').value;
+
+  if (clientFilter) rows = rows.filter(r => r.client_id === clientFilter);
+  if (consultantFilter) rows = rows.filter(r => r.consultant_id === consultantFilter);
+  if (fromFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.start_date >= fromFilter; });
+  if (toFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.end_date <= toFilter; });
+
+  if (rows.length === 0) { toast('No invoiced records to export', 'error'); return; }
+
+  // ---- Date helpers ----
+  // Format: "17-May-25"
+  function fmtPeriodDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso + 'T00:00:00');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = months[d.getMonth()];
+    const yy = String(d.getFullYear()).slice(-2);
+    return `${dd}-${mm}-${yy}`;
+  }
+
+  // Format: "Monday, 16 June 2025"
+  function fmtBillDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso + 'T00:00:00');
+    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  }
+
+  // Format: "31/07/25"  — end of next month from invoice date
+  function fmtDueDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso + 'T00:00:00');
+    // End of next month: go to month+2, day 0 = last day of month+1
+    const due = new Date(d.getFullYear(), d.getMonth() + 2, 0);
+    const dd = String(due.getDate()).padStart(2, '0');
+    const mm = String(due.getMonth() + 1).padStart(2, '0');
+    const yy = String(due.getFullYear()).slice(-2);
+    return `${dd}/${mm}/${yy}`;
+  }
+
+  // ---- CSV build ----
+  const headers = [
+    'Invoice Number',
+    'Candidate Name',
+    'Bill Rate ($/hr)',
+    'Description',
+    'Vendor',
+    'Period',
+    'Hours Approved',
+    'Total Bill Amount',
+    'Bill Date',
+    'Due Date'
+  ];
+
+  const csvRows = rows.map(inv => {
+    const cons = _consultants.find(c => c.id === inv.consultant_id);
+    const cli = _clients.find(c => c.id === inv.client_id);
+    const cyc = _cycles.find(c => c.id === inv.billing_cycle_id);
+
+    const name = cons?.name || '';
+    const vendor = cli?.name || '';
+    const rate = inv.billing_rate ? parseFloat(inv.billing_rate).toFixed(2) : '';
+    const hours = inv.hours != null ? inv.hours : '';
+    const total = (inv.billing_rate && inv.hours != null)
+      ? '$' + (parseFloat(inv.billing_rate) * parseFloat(inv.hours)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : '';
+
+    const periodStart = fmtPeriodDate(cyc?.start_date);
+    const periodEnd = fmtPeriodDate(cyc?.end_date);
+    const period = cyc ? `${periodStart} to ${periodEnd}` : '';
+
+    // Description: "Name_ PeriodStart to PeriodEnd_Hours Hours"
+    const description = `${name}_ ${period}_${hours} Hours`;
+
+    const billDate = fmtBillDate(inv.invoice_date);
+    const dueDate = fmtDueDate(inv.invoice_date);
+
+    return [
+      inv.invoice_number || '',
+      name,
+      rate ? `$${rate}` : '',
+      description,
+      vendor,
+      period,
+      hours,
+      total,
+      billDate,
+      dueDate
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+  });
+
+  const csv = [headers.map(h => `"${h}"`).join(','), ...csvRows].join('\r\n');
+
+  // ---- Trigger download ----
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const today = new Date().toISOString().split('T')[0];
+  a.download = `invoiced_export_${today}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast(`Exported ${rows.length} invoiced record(s) to CSV`);
+}
+
+// ============================================================
+//  EXPORT PENDING CSV
+// ============================================================
+async function exportPendingCSV() {
+  const { data } = await sb.from('invoices').select('*').eq('status', 'pending');
+  const today = new Date().toISOString().split('T')[0];
+  let rows = (data || []).filter(r => {
+    const cyc = _cycles.find(c => c.id === r.billing_cycle_id);
+    return cyc && cyc.end_date < today;
+  });
+
+  // Respect active filters
+  const clientFilter = document.getElementById('f-client').value;
+  const consultantFilter = document.getElementById('f-consultant').value;
+  const cycleFilter = document.getElementById('f-cycle').value;
+  const fromFilter = document.getElementById('f-from').value;
+  const toFilter = document.getElementById('f-to').value;
+
+  if (clientFilter) rows = rows.filter(r => r.client_id === clientFilter);
+  if (consultantFilter) rows = rows.filter(r => r.consultant_id === consultantFilter);
+  if (cycleFilter) rows = rows.filter(r => r.billing_cycle_id === cycleFilter);
+  if (fromFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.start_date >= fromFilter; });
+  if (toFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.end_date <= toFilter; });
+
+  if (rows.length === 0) { toast('No pending invoices to export', 'error'); return; }
+
+  // Reuse the same date helpers defined inside exportInvoicedCSV
+  function fmtPeriodDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso + 'T00:00:00');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${dd}-${months[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`;
+  }
+  function fmtBillDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso + 'T00:00:00');
+    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  }
+  function fmtDueDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso + 'T00:00:00');
+    const due = new Date(d.getFullYear(), d.getMonth() + 2, 0);
+    const dd = String(due.getDate()).padStart(2, '0');
+    const mm = String(due.getMonth() + 1).padStart(2, '0');
+    const yy = String(due.getFullYear()).slice(-2);
+    return `${dd}/${mm}/${yy}`;
+  }
+
+  const headers = [
+    'Invoice Number',
+    'Candidate Name',
+    'Bill Rate ($/hr)',
+    'Description',
+    'Vendor',
+    'Period',
+    'Hours Approved',
+    'Total Bill Amount',
+    'Bill Date',
+    'Due Date'
+  ];
+
+  // For pending, Bill Date = today (not yet invoiced), Due Date = end of next month from today
+  const billDate = fmtBillDate(today);
+  const dueDate  = fmtDueDate(today);
+
+  const csvRows = rows.map(inv => {
+    const cons = _consultants.find(c => c.id === inv.consultant_id);
+    const cli  = _clients.find(c => c.id === inv.client_id);
+    const cyc  = _cycles.find(c => c.id === inv.billing_cycle_id);
+
+    const name   = cons?.name || '';
+    const vendor = cli?.name  || '';
+    const rate   = inv.billing_rate ? parseFloat(inv.billing_rate).toFixed(2) : '';
+    const hours  = inv.hours != null ? inv.hours : '';
+    const total  = (inv.billing_rate && inv.hours != null)
+      ? '$' + (parseFloat(inv.billing_rate) * parseFloat(inv.hours)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : '';
+
+    const periodStart = fmtPeriodDate(cyc?.start_date);
+    const periodEnd   = fmtPeriodDate(cyc?.end_date);
+    const period      = cyc ? `${periodStart} to ${periodEnd}` : '';
+    const description = `${name}_ ${period}_${hours} Hours`;
+
+    return [
+      inv.invoice_number || '',
+      name,
+      rate ? `$${rate}` : '',
+      description,
+      vendor,
+      period,
+      hours,
+      total,
+      billDate,
+      dueDate
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+  });
+
+  const csv = [headers.map(h => `"${h}"`).join(','), ...csvRows].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pending_invoices_export_${today}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast(`Exported ${rows.length} pending invoice(s) to CSV`);
+}
+
 
 async function loadUpcoming() {
   const today = new Date().toISOString().split('T')[0];
@@ -873,7 +1369,7 @@ async function loadUpcoming() {
       <td><strong>${cons?.name || '—'}</strong></td>
       <td>${cli?.name || '—'}</td>
       <td>${cyc.label || ''}</td>
-      <td class="mono" style="font-size:12px;">${cyc.start_date} → ${cyc.end_date}</td>
+      <td class="mono" style="font-size:12px;">${fmtDate(cyc.start_date)} → ${fmtDate(cyc.end_date)}</td>
       <td class="mono">${asgn.billing_rate ? '$'+asgn.billing_rate : '—'}</td>
       <td>${statusBadge}</td>
     </tr>`;
@@ -1070,7 +1566,7 @@ async function loadBillingCycles() {
     return `<tr>
       <td>${cli?.name||'—'}</td>
       <td><span class="badge badge-active" style="background:var(--surface-3);color:var(--text-2);text-transform:capitalize;">${c.cycle_type||'custom'}</span></td>
-      <td class="mono" style="font-size:12px;">${c.start_date} → ${c.end_date}<br><span style="color:var(--text-3);font-family:inherit;">${c.label||''}</span></td>
+      <td class="mono" style="font-size:12px;">${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}<br><span style="color:var(--text-3);font-family:inherit;">${c.label||''}</span></td>
       <td>${statusBadge}</td>
       <td>${consNames.map(n=>`<span class="cycle-chip">${n}</span>`).join('')||'<span style="color:var(--text-3);font-size:12px;">None</span>'}</td>
       <td style="display:flex;gap:6px;">
@@ -1095,7 +1591,7 @@ async function unassignEndedCycles() {
   loadBillingCycles();
 }
 
-function cycleLabel(cyc) { if(!cyc) return '—'; return `${cyc.start_date} → ${cyc.end_date}`; }
+function cycleLabel(cyc) { if(!cyc) return '—'; return `${fmtDate(cyc.start_date)} → ${fmtDate(cyc.end_date)}`; }
 
 function onCycleTypeChange() {
   const t = document.getElementById('cyc-type').value;
@@ -1230,16 +1726,17 @@ function renderCycleList(clientId, fromDate) {
     const status = c.end_date < today ? 'ended' : (c.start_date <= today ? 'active' : 'upcoming');
     const statusColor = status === 'ended' ? 'var(--warning)' : status === 'active' ? 'var(--success)' : 'var(--brand)';
     const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
-    // Auto-check: if fromDate set, select cycles where start_date >= fromDate (cycle starts on/after that date)
-    // If no fromDate, select active and upcoming by default
+    // Auto-check: if fromDate is set, select cycles whose end_date >= fromDate.
+    // This ensures the cycle that CONTAINS the start date is included (not just cycles starting after it).
+    // If no fromDate, select active and upcoming by default.
     const autoCheck = fromDate
-      ? c.start_date >= fromDate
+      ? c.end_date >= fromDate
       : status !== 'ended';
     const opacity = status === 'ended' ? 'opacity:0.55;' : '';
     return `<label style="display:flex; align-items:center; gap:8px; padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border); font-size:12px; ${opacity}" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background=''">
       <input type="checkbox" class="cycle-chk" data-id="${c.id}" data-status="${status}" data-start="${c.start_date}" data-end="${c.end_date}" ${autoCheck ? 'checked' : ''} style="accent-color:var(--brand); width:14px; height:14px; flex-shrink:0;">
       <span style="flex:1;">
-        <span class="mono" style="font-size:11px; color:var(--text-2);">${c.start_date} → ${c.end_date}</span>
+        <span class="mono" style="font-size:11px; color:var(--text-2);">${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}</span>
         <span style="display:flex; gap:4px; align-items:center; margin-top:1px;">
           ${c.label ? `<span style="color:var(--text-3); font-size:10px;">${c.label}</span>` : ''}
           <span style="font-size:9px; font-weight:600; color:${statusColor}; text-transform:uppercase;">${statusLabel}</span>
@@ -1268,8 +1765,8 @@ async function loadAssignments() {
   const selectedCycleObjs = _cycles.filter(c => cycleIds.includes(c.id)).sort((a,b)=>a.start_date.localeCompare(b.start_date));
   document.getElementById('asgn-cycle-summary').textContent =
     cycleIds.length === 1
-      ? `Cycle: ${selectedCycleObjs[0]?.start_date} \u2192 ${selectedCycleObjs[0]?.end_date}`
-      : `${cycleIds.length} billing cycles selected (${selectedCycleObjs[0]?.start_date} \u2192 ${selectedCycleObjs[selectedCycleObjs.length-1]?.end_date})`;
+      ? `Cycle: ${fmtDate(selectedCycleObjs[0]?.start_date)} \u2192 ${fmtDate(selectedCycleObjs[0]?.end_date)}`
+      : `${cycleIds.length} billing cycles selected (${fmtDate(selectedCycleObjs[0]?.start_date)} \u2192 ${fmtDate(selectedCycleObjs[selectedCycleObjs.length-1]?.end_date)})`;
 
   // Fetch all assignments for selected cycles in one go
   const { data: cycleAssignments } = await sb.from('consultant_billing_cycles').select('*').in('billing_cycle_id', cycleIds);
@@ -1280,7 +1777,11 @@ async function loadAssignments() {
     // Find assignments for this consultant across selected cycles
     const myAsgns = (cycleAssignments||[]).filter(a=>a.consultant_id===c.id);
     const assignedCount = myAsgns.length;
-    const rate = myAsgns[0]?.billing_rate || (clientRates||[]).find(r=>r.consultant_id===c.id)?.billing_rate || '';
+    // Pick the first non-null billing_rate across all assignments for this consultant;
+    // fall back to the consultant-client rate table
+    const rateFromAsgn = myAsgns.map(a => a.billing_rate).find(r => r != null && r !== '');
+    const rateFromClient = (clientRates||[]).find(r => r.consultant_id === c.id)?.billing_rate;
+    const rate = rateFromAsgn ?? rateFromClient ?? '';
 
     // Start date: only pre-fill if there's an existing assignment with a start_date. Otherwise leave blank.
     const existingStart = myAsgns.length
@@ -1330,7 +1831,11 @@ async function bulkAssign() {
   let assignedCount = 0;
 
   for (const cId of checked) {
-    const rate = document.getElementById(`rate-${cId}`)?.value || null;
+    // Parse rate as float — null if empty/invalid so Supabase stores NULL not empty string
+    const rateRaw = document.getElementById(`rate-${cId}`)?.value;
+    const rate = (rateRaw !== '' && rateRaw != null && !isNaN(parseFloat(rateRaw)))
+      ? parseFloat(rateRaw)
+      : null;
     const sdate = document.getElementById(`sdate-${cId}`)?.value || null;
     const edate = document.getElementById(`edate-${cId}`)?.value || null;
 
@@ -1370,11 +1875,29 @@ async function bulkAssign() {
         .eq('consultant_id', u.consultant_id)
         .eq('billing_cycle_id', u.billing_cycle_id);
     }
+
+    // ── KEY FIX: sync billing_rate to any existing pending invoices for this consultant ──
+    // If a pending invoice was already auto-generated with null rate, update it now.
+    if (rate !== null) {
+      for (const cycle of applicableCycles) {
+        await sb.from('invoices')
+          .update({ billing_rate: rate })
+          .eq('consultant_id', cId)
+          .eq('billing_cycle_id', cycle.id)
+          .eq('status', 'pending');
+      }
+    }
+
     assignedCount++;
   }
 
-  toast(`${assignedCount} consultant(s) assigned across applicable billing cycles`);
+  // Generate pending invoices for any newly assigned ended-cycle consultants
   await fetchAssignments();
+  await autoGeneratePending();
+  await fetchPendingInvoices();
+  loadDashboard();
+
+  toast(`${assignedCount} consultant(s) assigned — rates synced to pending invoices`);
   loadAssignments();
 }
 
@@ -1383,14 +1906,31 @@ async function bulkUnassign() {
   if (cycleIds.length === 0) { toast('Select at least one billing cycle', 'error'); return; }
   const checked = [...document.querySelectorAll('.asgn-chk:checked')].map(c=>c.dataset.id);
   if (checked.length === 0) { toast('Select consultants to unassign', 'error'); return; }
-  if (!confirm(`Unassign ${checked.length} consultant(s) from ${cycleIds.length} cycle(s)?`)) return;
-  for (const cycleId of cycleIds) {
-    for (const cId of checked) {
-      await sb.from('consultant_billing_cycles').delete().eq('consultant_id',cId).eq('billing_cycle_id',cycleId);
-      await sb.from('invoices').delete().eq('consultant_id',cId).eq('billing_cycle_id',cycleId).eq('status','pending');
+  if (!confirm(`Unassign ${checked.length} consultant(s) from applicable cycle(s)?`)) return;
+
+  // Sort selected cycles by start_date
+  const selectedCycleObjs = cycleIds.map(id => _cycles.find(c=>c.id===id)).filter(Boolean).sort((a,b)=>a.start_date.localeCompare(b.start_date));
+
+  let unassignedCount = 0;
+  for (const cId of checked) {
+    const edate = document.getElementById(`edate-${cId}`)?.value || null;
+
+    // Determine which cycles to unassign:
+    // If edate is set, only unassign cycles that START AFTER the end date.
+    // Cycles where start_date <= edate remain assigned (the consultant covers those).
+    // If no edate, unassign all selected cycles.
+    const cyclesToUnassign = selectedCycleObjs.filter(cycle => {
+      if (edate && cycle.start_date <= edate) return false; // cycle is covered by consultant's end date — keep
+      return true; // no end date or cycle starts after end date — unassign
+    });
+
+    for (const cycle of cyclesToUnassign) {
+      await sb.from('consultant_billing_cycles').delete().eq('consultant_id', cId).eq('billing_cycle_id', cycle.id);
+      await sb.from('invoices').delete().eq('consultant_id', cId).eq('billing_cycle_id', cycle.id).eq('status', 'pending');
+      unassignedCount++;
     }
   }
-  toast(`${checked.length} consultant(s) unassigned from ${cycleIds.length} cycle(s)`);
+  toast(`Unassigned ${checked.length} consultant(s) from ${unassignedCount} cycle assignment(s)`);
   await fetchAssignments();
   loadAssignments();
 }
@@ -1528,7 +2068,7 @@ async function checkPendingOnLogin() {
 //  FILTER DROPDOWNS POPULATION
 // ============================================================
 function populateFilterDropdowns() {
-  const clientSels = ['f-client','bc-client-filter','uf-client'];
+  const clientSels = ['f-client','bc-client-filter','uf-client','if-client'];
   clientSels.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -1536,7 +2076,7 @@ function populateFilterDropdowns() {
     el.innerHTML = '<option value="">All Clients</option>' + _clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
     el.value = cur;
   });
-  ['f-consultant','uf-consultant'].forEach(id => { const el=document.getElementById(id); if(!el) return; const cur=el.value; el.innerHTML='<option value="">All Consultants</option>'+_consultants.map(c=>`<option value="${c.id}">${c.name}</option>`).join(''); el.value=cur; });
+  ['f-consultant','uf-consultant','if-consultant'].forEach(id => { const el=document.getElementById(id); if(!el) return; const cur=el.value; el.innerHTML='<option value="">All Consultants</option>'+_consultants.map(c=>`<option value="${c.id}">${c.name}</option>`).join(''); el.value=cur; });
   const cycSel = document.getElementById('f-cycle');
   if (cycSel) { const cur=cycSel.value; cycSel.innerHTML='<option value="">All Cycles</option>'+_cycles.map(c=>`<option value="${c.id}">${c.start_date} → ${c.end_date}${c.label?' ('+c.label+')':''}</option>`).join(''); cycSel.value=cur; }
 }
@@ -1636,10 +2176,12 @@ CREATE TABLE invoices (
   client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
   status TEXT DEFAULT 'pending',
   billing_rate NUMERIC(10,2),
+  hours NUMERIC(10,2),
   invoice_number TEXT,
   invoice_date DATE,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+-- If table already exists, run: ALTER TABLE invoices ADD COLUMN IF NOT EXISTS hours NUMERIC(10,2);
 
 CREATE TABLE settings (
   key TEXT PRIMARY KEY,
