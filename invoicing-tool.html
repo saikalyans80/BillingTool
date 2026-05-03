@@ -664,10 +664,10 @@
   <div class="modal" style="max-width:540px;">
     <div class="modal-header"><h3 style="font-size:15px; font-weight:600; margin:0;">Bulk Add Consultants</h3><button class="modal-close" onclick="closeModal('bulk-consultant-modal')">×</button></div>
     <div class="modal-body">
-      <p style="font-size:12px; color:var(--text-2); margin-bottom:12px;">Paste one consultant per line. Format: <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px;">Name, Email, Phone</code> (email and phone optional)</p>
+      <p style="font-size:12px; color:var(--text-2); margin-bottom:12px;">Paste one consultant per line. Fields are separated by <strong>semicolons</strong> (so names may include commas). Format: <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px;">Name; Email; Phone</code> (email and phone optional)</p>
       <div class="form-group">
         <label class="form-label">Consultants (one per line)</label>
-        <textarea id="bulk-cons-input" class="form-control" rows="10" placeholder="John Smith, john@example.com, +1 555 0001&#10;Jane Doe, jane@example.com&#10;Bob Johnson"></textarea>
+        <textarea id="bulk-cons-input" class="form-control" rows="10" placeholder="Smith, John; john@example.com; +1 555 0001&#10;Jane Doe; jane@example.com&#10;Bob Johnson"></textarea>
       </div>
       <div id="bulk-cons-preview" style="margin-top:8px; font-size:12px; color:var(--text-2);"></div>
     </div>
@@ -2691,7 +2691,7 @@ function openBulkConsultantModal() {
 function parseBulkConsultants() {
   const lines = document.getElementById('bulk-cons-input').value.split('\n').map(l=>l.trim()).filter(Boolean);
   return lines.map(line => {
-    const parts = line.split(',').map(p=>p.trim());
+    const parts = line.split(';').map(p=>p.trim());
     return { name: parts[0]||'', email: parts[1]||'', phone: parts[2]||'' };
   }).filter(c=>c.name);
 }
