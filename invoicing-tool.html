@@ -1662,7 +1662,8 @@ async function exportInvoicedCSV() {
 //  EXPORT PENDING CSV
 // ============================================================
 async function exportPendingCSV() {
-  const { data } = await sb.from('invoices').select('*').eq('status', 'pending');
+  const { ok, data } = await unwrapSupabase('Load pending for export', sb.from('invoices').select('*').eq('status', 'pending'));
+  if (!ok) return;
   const today = new Date().toISOString().split('T')[0];
   let rows = (data || []).filter(r => {
     const cyc = _cycles.find(c => c.id === r.billing_cycle_id);
@@ -1804,9 +1805,9 @@ async function loadUpcoming() {
       ? `<span class="badge badge-active">Active</span>`
       : `<span class="badge" style="background:var(--surface-3);color:var(--text-2);">Upcoming</span>`;
     return `<tr>
-      <td><strong>${cons?.name || '—'}</strong></td>
-      <td>${cli?.name || '—'}</td>
-      <td>${cyc.label || ''}</td>
+      <td><strong>${escapeHtml(cons?.name || '—')}</strong></td>
+      <td>${escapeHtml(cli?.name || '—')}</td>
+      <td>${escapeHtml(cyc.label || '')}</td>
       <td class="mono" style="font-size:12px;">${fmtDate(cyc.start_date)} → ${fmtDate(cyc.end_date)}</td>
       <td class="mono">${asgn.billing_rate ? '$'+asgn.billing_rate : '—'}</td>
       <td>${statusBadge}</td>
@@ -1823,8 +1824,10 @@ function clearUpcomingFilters() {
 
 async function removePendingInvoice(invId, consultantId, cycleId) {
   if (!confirm('Remove this pending invoice? The consultant will be unassigned from this billing cycle.')) return;
-  await sb.from('invoices').delete().eq('id', invId);
-  await sb.from('consultant_billing_cycles').delete().eq('consultant_id', consultantId).eq('billing_cycle_id', cycleId);
+  const d1 = await unwrapSupabase('Delete pending invoice', sb.from('invoices').delete().eq('id', invId));
+  if (!d1.ok) return;
+  const d2 = await unwrapSupabase('Remove cycle assignment', sb.from('consultant_billing_cycles').delete().eq('consultant_id', consultantId).eq('billing_cycle_id', cycleId));
+  if (!d2.ok) return;
   toast('Invoice removed and consultant unassigned from cycle.');
   await fetchAssignments();
   await fetchPendingInvoices();
@@ -1874,7 +1877,8 @@ async function confirmMarkInvoiced() {
   const hours = (hoursVal !== '' && hoursVal != null && !isNaN(parseFloat(hoursVal))) ? parseFloat(hoursVal) : null;
   const updatePayload = { status:'invoiced', invoice_number: num||null, invoice_date: date };
   if (hours != null) updatePayload.hours = hours;
-  await sb.from('invoices').update(updatePayload).eq('id', id);
+  const { ok } = await unwrapSupabase('Mark as invoiced', sb.from('invoices').update(updatePayload).eq('id', id));
+  if (!ok) return;
   toast('Marked as invoiced!');
   closeModal('invoice-modal');
   await fetchPendingInvoices();
@@ -1893,10 +1897,10 @@ async function loadConsultants() {
     const clientIds = [...new Set(_assignments.filter(a=>a.consultant_id===c.id).map(a=>{ const cyc=_cycles.find(cy=>cy.id===a.billing_cycle_id); return cyc?.client_id; }).filter(Boolean))];
     const clientNames = clientIds.map(id => _clients.find(cl=>cl.id===id)?.name).filter(Boolean);
     return `<tr>
-      <td><strong>${c.name}</strong>${c.notes?`<br><span style="font-size:11px;color:var(--text-3);">${c.notes}</span>`:''}` +`</td>
-      <td>${c.email||'—'}</td>
-      <td>${c.phone||'—'}</td>
-      <td>${clientNames.map(n=>`<span class="cycle-chip">${n}</span>`).join('')||'<span style="color:var(--text-3);font-size:12px;">None</span>'}</td>
+      <td><strong>${escapeHtml(c.name)}</strong>${c.notes?`<br><span style="font-size:11px;color:var(--text-3);">${escapeHtml(c.notes)}</span>`:''}` +`</td>
+      <td>${escapeHtml(c.email||'—')}</td>
+      <td>${escapeHtml(c.phone||'—')}</td>
+      <td>${clientNames.map(n=>`<span class="cycle-chip">${escapeHtml(n)}</span>`).join('')||'<span style="color:var(--text-3);font-size:12px;">None</span>'}</td>
       <td style="display:flex;gap:6px;">
         <button class="btn btn-secondary btn-xs" onclick="openConsultantModal('${c.id}')">Edit</button>
         <button class="btn btn-danger btn-xs" onclick="deleteConsultant('${c.id}')">Delete</button>
@@ -1924,8 +1928,13 @@ async function saveConsultant() {
   const name = document.getElementById('cons-name').value.trim();
   if (!name) { toast('Name is required','error'); return; }
   const payload = { name, email: document.getElementById('cons-email').value, phone: document.getElementById('cons-phone').value, notes: document.getElementById('cons-notes').value };
-  if (id) await sb.from('consultants').update(payload).eq('id',id);
-  else await sb.from('consultants').insert(payload);
+  if (id) {
+    const u = await unwrapSupabase('Update consultant', sb.from('consultants').update(payload).eq('id',id));
+    if (!u.ok) return;
+  } else {
+    const ins = await unwrapSupabase('Add consultant', sb.from('consultants').insert(payload));
+    if (!ins.ok) return;
+  }
   closeModal('consultant-modal');
   toast(id ? 'Consultant updated' : 'Consultant added');
   await loadAllData();
@@ -1934,9 +1943,12 @@ async function saveConsultant() {
 
 async function deleteConsultant(id) {
   if (!confirm('Delete this consultant? All assignments and invoices will also be removed.')) return;
-  await sb.from('invoices').delete().eq('consultant_id',id);
-  await sb.from('consultant_billing_cycles').delete().eq('consultant_id',id);
-  await sb.from('consultants').delete().eq('id',id);
+  const x1 = await unwrapSupabase('Delete consultant invoices', sb.from('invoices').delete().eq('consultant_id',id));
+  if (!x1.ok) return;
+  const x2 = await unwrapSupabase('Delete consultant assignments', sb.from('consultant_billing_cycles').delete().eq('consultant_id',id));
+  if (!x2.ok) return;
+  const x3 = await unwrapSupabase('Delete consultant', sb.from('consultants').delete().eq('id',id));
+  if (!x3.ok) return;
   toast('Consultant deleted');
   await loadAllData();
   loadConsultants();
@@ -1952,9 +1964,9 @@ async function loadClients() {
   tbody.innerHTML = _clients.map(c => {
     const cycleCount = _cycles.filter(cy=>cy.client_id===c.id).length;
     return `<tr>
-      <td><strong>${c.name}</strong></td>
-      <td>${c.contact||'—'}</td>
-      <td>${c.email||'—'}</td>
+      <td><strong>${escapeHtml(c.name)}</strong></td>
+      <td>${escapeHtml(c.contact||'—')}</td>
+      <td>${escapeHtml(c.email||'—')}</td>
       <td><span class="badge badge-active">${cycleCount} cycle${cycleCount!==1?'s':''}</span></td>
       <td style="display:flex;gap:6px;">
         <button class="btn btn-secondary btn-xs" onclick="openClientModal('${c.id}')">Edit</button>
@@ -1983,8 +1995,13 @@ async function saveClient() {
   const name = document.getElementById('cli-name').value.trim();
   if (!name) { toast('Client name is required','error'); return; }
   const payload = { name, contact: document.getElementById('cli-contact').value, email: document.getElementById('cli-email').value, phone: document.getElementById('cli-phone').value };
-  if (id) await sb.from('clients').update(payload).eq('id',id);
-  else await sb.from('clients').insert(payload);
+  if (id) {
+    const u = await unwrapSupabase('Update client', sb.from('clients').update(payload).eq('id',id));
+    if (!u.ok) return;
+  } else {
+    const ins = await unwrapSupabase('Add client', sb.from('clients').insert(payload));
+    if (!ins.ok) return;
+  }
   closeModal('client-modal');
   toast(id ? 'Client updated' : 'Client added');
   await loadAllData();
@@ -1995,11 +2012,15 @@ async function deleteClient(id) {
   if (!confirm('Delete this client? All billing cycles and invoices for this client will also be removed.')) return;
   const cycleIds = _cycles.filter(c=>c.client_id===id).map(c=>c.id);
   if (cycleIds.length) {
-    await sb.from('invoices').delete().in('billing_cycle_id',cycleIds);
-    await sb.from('consultant_billing_cycles').delete().in('billing_cycle_id',cycleIds);
-    await sb.from('billing_cycles').delete().in('id',cycleIds);
+    const d1 = await unwrapSupabase('Delete client invoices', sb.from('invoices').delete().in('billing_cycle_id',cycleIds));
+    if (!d1.ok) return;
+    const d2 = await unwrapSupabase('Delete client cycle assignments', sb.from('consultant_billing_cycles').delete().in('billing_cycle_id',cycleIds));
+    if (!d2.ok) return;
+    const d3 = await unwrapSupabase('Delete client billing cycles', sb.from('billing_cycles').delete().in('id',cycleIds));
+    if (!d3.ok) return;
   }
-  await sb.from('clients').delete().eq('id',id);
+  const d4 = await unwrapSupabase('Delete client', sb.from('clients').delete().eq('id',id));
+  if (!d4.ok) return;
   toast('Client deleted');
   await loadAllData();
   loadClients();
@@ -2026,11 +2047,11 @@ async function loadBillingCycles() {
     let status = c.end_date < today ? 'ended' : (c.start_date <= today ? 'active' : 'upcoming');
     const statusBadge = status==='ended' ? `<span class="badge badge-pending">Ended</span>` : status==='active' ? `<span class="badge badge-active">Active</span>` : `<span class="badge" style="background:var(--surface-3);color:var(--text-2);">Upcoming</span>`;
     return `<tr>
-      <td>${cli?.name||'—'}</td>
-      <td><span class="badge badge-active" style="background:var(--surface-3);color:var(--text-2);text-transform:capitalize;">${c.cycle_type||'custom'}</span></td>
-      <td class="mono" style="font-size:12px;">${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}<br><span style="color:var(--text-3);font-family:inherit;">${c.label||''}</span></td>
+      <td>${escapeHtml(cli?.name||'—')}</td>
+      <td><span class="badge badge-active" style="background:var(--surface-3);color:var(--text-2);text-transform:capitalize;">${escapeHtml(c.cycle_type||'custom')}</span></td>
+      <td class="mono" style="font-size:12px;">${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}<br><span style="color:var(--text-3);font-family:inherit;">${escapeHtml(c.label||'')}</span></td>
       <td>${statusBadge}</td>
-      <td>${consNames.map(n=>`<span class="cycle-chip">${n}</span>`).join('')||'<span style="color:var(--text-3);font-size:12px;">None</span>'}</td>
+      <td>${consNames.map(n=>`<span class="cycle-chip">${escapeHtml(n)}</span>`).join('')||'<span style="color:var(--text-3);font-size:12px;">None</span>'}</td>
       <td style="display:flex;gap:6px;">
         <button class="btn btn-danger btn-xs" onclick="deleteCycle('${c.id}')">Delete</button>
       </td>
@@ -2046,8 +2067,10 @@ async function unassignEndedCycles() {
   const affectedAsgns = _assignments.filter(a => endedIds.includes(a.billing_cycle_id));
   if (affectedAsgns.length === 0) { toast('No consultant assignments to remove for ended cycles'); return; }
   if (!confirm(`This will unassign ${affectedAsgns.length} consultant assignment(s) from ${endedCycles.length} ended cycle(s). Pending invoices for these will also be removed. Continue?`)) return;
-  await sb.from('invoices').delete().in('billing_cycle_id', endedIds).eq('status','pending');
-  await sb.from('consultant_billing_cycles').delete().in('billing_cycle_id', endedIds);
+  const u1 = await unwrapSupabase('Remove pending invoices for ended cycles', sb.from('invoices').delete().in('billing_cycle_id', endedIds).eq('status','pending'));
+  if (!u1.ok) return;
+  const u2 = await unwrapSupabase('Unassign ended cycles', sb.from('consultant_billing_cycles').delete().in('billing_cycle_id', endedIds));
+  if (!u2.ok) return;
   toast(`Unassigned ${affectedAsgns.length} assignment(s) from ${endedCycles.length} ended cycle(s)`);
   await loadAllData();
   loadBillingCycles();
@@ -2105,7 +2128,8 @@ async function saveCycle() {
     const cycles = generateCycles(type, s, count);
     toInsert = cycles.map(c => ({ client_id:clientId, cycle_type:type, start_date:c.start, end_date:c.end, label }));
   }
-  await sb.from('billing_cycles').insert(toInsert);
+  const insCyc = await unwrapSupabase('Create billing cycles', sb.from('billing_cycles').insert(toInsert));
+  if (!insCyc.ok) return;
   // Auto-extend: assign existing consultants to newly created cycles
   await autoExtendAssignmentsToNewCycles(clientId, toInsert.map(c => c.start_date));
   closeModal('cycle-modal');
@@ -2121,12 +2145,15 @@ async function autoExtendAssignmentsToNewCycles(clientId, newCycleStartDates) {
   if (newCycles.length === 0) return;
   // Get all consultants with existing assignments for this client
   const existingCycleIds = _cycles.filter(c => c.client_id === clientId).map(c => c.id);
-  const { data: existingAsgns } = await sb.from('consultant_billing_cycles').select('*').in('billing_cycle_id', existingCycleIds);
-  const { data: clientRates } = await sb.from('consultant_client_rates').select('*').eq('client_id', clientId);
+  const { ok: okA, data: existingAsgns } = await unwrapSupabase('Load assignments for auto-extend', sb.from('consultant_billing_cycles').select('*').in('billing_cycle_id', existingCycleIds));
+  if (!okA) return;
+  const { ok: okR, data: clientRates } = await unwrapSupabase('Load client rates', sb.from('consultant_client_rates').select('*').eq('client_id', clientId));
+  if (!okR) return;
   // For each new cycle, assign all consultants that had any assignment for this client
   const uniqueConsIds = [...new Set((existingAsgns||[]).map(a => a.consultant_id))];
   if (uniqueConsIds.length === 0) return;
-  const { data: alreadyIn } = await sb.from('consultant_billing_cycles').select('consultant_id,billing_cycle_id').in('billing_cycle_id', newCycles.map(c => c.id));
+  const { ok: okIn, data: alreadyIn } = await unwrapSupabase('Load existing cycle assignments', sb.from('consultant_billing_cycles').select('consultant_id,billing_cycle_id').in('billing_cycle_id', newCycles.map(c => c.id)));
+  if (!okIn) return;
   const alreadySet = new Set((alreadyIn||[]).map(a => `${a.consultant_id}__${a.billing_cycle_id}`));
   const toInsertExt = [];
   for (const consId of uniqueConsIds) {
@@ -2137,16 +2164,20 @@ async function autoExtendAssignmentsToNewCycles(clientId, newCycleStartDates) {
     }
   }
   if (toInsertExt.length) {
-    await sb.from('consultant_billing_cycles').insert(toInsertExt);
+    const ext = await unwrapSupabase('Auto-extend assignments', sb.from('consultant_billing_cycles').insert(toInsertExt));
+    if (!ext.ok) return;
     toast(`Auto-extended ${toInsertExt.length} assignment(s) to new cycle(s)`);
   }
 }
 
 async function deleteCycle(id) {
   if (!confirm('Delete this billing cycle? All associated invoices and assignments will be removed.')) return;
-  await sb.from('invoices').delete().eq('billing_cycle_id',id);
-  await sb.from('consultant_billing_cycles').delete().eq('billing_cycle_id',id);
-  await sb.from('billing_cycles').delete().eq('id',id);
+  const d1 = await unwrapSupabase('Delete cycle invoices', sb.from('invoices').delete().eq('billing_cycle_id',id));
+  if (!d1.ok) return;
+  const d2 = await unwrapSupabase('Delete cycle assignments', sb.from('consultant_billing_cycles').delete().eq('billing_cycle_id',id));
+  if (!d2.ok) return;
+  const d3 = await unwrapSupabase('Delete billing cycle', sb.from('billing_cycles').delete().eq('id',id));
+  if (!d3.ok) return;
   toast('Billing cycle deleted');
   await loadAllData();
   loadBillingCycles();
