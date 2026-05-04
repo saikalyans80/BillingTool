@@ -588,10 +588,14 @@
               </button>
             </div>
             <div id="ts-duplicate-list-warning" style="display:none;margin:0 20px 12px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:12px;color:#92400e;line-height:1.45;"></div>
+            <div id="ts-bulk-bar" style="display:none;margin:0 20px 12px;padding:10px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+              <span id="ts-bulk-count" style="font-size:12px;color:var(--text-2);font-weight:500;">0 selected</span>
+              <button type="button" id="ts-bulk-delete-btn" class="btn btn-danger btn-sm" onclick="bulkDeleteTs()" disabled>Delete selected</button>
+            </div>
             <div class="tbl-wrap">
               <table class="tbl">
-                <thead><tr><th>Consultant</th><th>Client</th><th>Billing Cycle</th><th>Week Ending</th><th>Sat</th><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Total</th><th>Proof</th><th>Notes</th><th>Actions</th></tr></thead>
-                <tbody id="all-timesheets-body"><tr><td colspan="15" style="color:var(--text-3);text-align:center;padding:30px;">Loading...</td></tr></tbody>
+                <thead><tr><th style="width:36px;text-align:center;"><input type="checkbox" id="ts-bulk-select-all" title="Select all rows in this list" onchange="onTsBulkSelectAll(this)" style="cursor:pointer;"></th><th>Consultant</th><th>Client</th><th>Billing Cycle</th><th>Week Ending</th><th>Sat</th><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Total</th><th>Proof</th><th>Notes</th><th>Actions</th></tr></thead>
+                <tbody id="all-timesheets-body"><tr><td colspan="16" style="color:var(--text-3);text-align:center;padding:30px;">Loading...</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -3122,11 +3126,20 @@ function gsGuessFieldFromHeader(h) {
   return '';
 }
 
+/** YYYY-MM-DD from the local calendar (do not use toISOString() — it is UTC and shifts dates in many timezones). */
+function isoDateFromLocal(d) {
+  if (!d || isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function parseSheetDateTryYmd(y, mo, d) {
   if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
-  const dt = new Date(y, mo - 1, d);
+  const dt = new Date(y, mo - 1, d, 12, 0, 0, 0);
   if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
-  return dt.toISOString().split('T')[0];
+  return isoDateFromLocal(dt);
 }
 
 function parseSheetDate(val) {
@@ -3152,7 +3165,7 @@ function parseSheetDate(val) {
   }
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   const d = new Date(s);
-  if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+  if (!isNaN(d.getTime())) return isoDateFromLocal(d);
   return null;
 }
 
@@ -3198,7 +3211,7 @@ function resolveBillingCycleForWeek(consultantId, clientId, weekEndingFriday) {
   if (!we) return null;
   const weekStart = new Date(we + 'T00:00:00');
   weekStart.setDate(weekStart.getDate() - 6);
-  const weekStartStr = weekStart.toISOString().split('T')[0];
+  const weekStartStr = isoDateFromLocal(weekStart);
 
   const matchIn = cycles =>
     cycles.find(c => we >= c.start_date && we <= c.end_date)
@@ -3777,11 +3790,16 @@ async function fetchTimesheets() {
 // Snap any date to the nearest upcoming Friday (or same day if Friday)
 function snapToFriday(dateStr) {
   if (!dateStr) return '';
-  const d = new Date(dateStr + 'T00:00:00');
+  const s = String(dateStr).trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  const d = iso
+    ? new Date(+iso[1], +iso[2] - 1, +iso[3], 12, 0, 0, 0)
+    : new Date(s.includes('T') ? s : `${s}T12:00:00`);
+  if (isNaN(d.getTime())) return '';
   const day = d.getDay(); // 0=Sun,1=Mon,...,5=Fri,6=Sat
   const diff = day <= 5 ? 5 - day : 6; // days until Friday
   d.setDate(d.getDate() + diff);
-  return d.toISOString().split('T')[0];
+  return isoDateFromLocal(d);
 }
 
 /** ISO YYYY-MM-DD plus delta calendar days (noon anchor avoids DST edge cases). */
@@ -3828,7 +3846,7 @@ function getFridaysInCycle(cycleStart, cycleEnd) {
   const toFri = day <= 5 ? 5 - day : 6;
   cur.setDate(cur.getDate() + toFri);
   while (cur <= end) {
-    fridays.push(cur.toISOString().split('T')[0]);
+    fridays.push(isoDateFromLocal(cur));
     cur = new Date(cur);
     cur.setDate(cur.getDate() + 7);
   }
@@ -3888,7 +3906,7 @@ async function loadTimesheets() {
   populateTsDropdowns();
   // Default week ending to next Friday
   const we = document.getElementById('ts-week-ending');
-  if (we && !we.value) we.value = snapToFriday(new Date().toISOString().split('T')[0]);
+  if (we && !we.value) we.value = snapToFriday(isoDateFromLocal(new Date()));
   updateMissingTsBadge();
 }
 
@@ -4014,7 +4032,7 @@ function clearTsForm() {
   document.getElementById('ts-edit-id').value = '';
   ['sat','sun','mon','tue','wed','thu','fri'].forEach(d => document.getElementById('ts-'+d).value = 0);
   document.getElementById('ts-notes').value = '';
-  document.getElementById('ts-week-ending').value = snapToFriday(new Date().toISOString().split('T')[0]);
+  document.getElementById('ts-week-ending').value = snapToFriday(isoDateFromLocal(new Date()));
   document.getElementById('ts-cycle').value = '';
   const det = document.getElementById('ts-cycle-detected');
   det.textContent = 'Select consultant, client and week ending first';
@@ -4170,7 +4188,18 @@ async function loadAllTimesheets() {
   const listWarn = document.getElementById('ts-duplicate-list-warning');
   if (rows.length === 0) {
     if (listWarn) { listWarn.style.display = 'none'; listWarn.textContent = ''; }
-    tbody.innerHTML = `<tr><td colspan="15" style="color:var(--text-3);text-align:center;padding:30px;">No timesheet entries found.</td></tr>`;
+    const bar = document.getElementById('ts-bulk-bar');
+    if (bar) bar.style.display = 'none';
+    const master = document.getElementById('ts-bulk-select-all');
+    if (master) {
+      master.checked = false;
+      master.indeterminate = false;
+    }
+    const bbtn = document.getElementById('ts-bulk-delete-btn');
+    if (bbtn) bbtn.disabled = true;
+    const blbl = document.getElementById('ts-bulk-count');
+    if (blbl) blbl.textContent = '0 selected';
+    tbody.innerHTML = `<tr><td colspan="16" style="color:var(--text-3);text-align:center;padding:30px;">No timesheet entries found.</td></tr>`;
     return;
   }
   const dupCounts = new Map();
@@ -4204,6 +4233,7 @@ async function loadAllTimesheets() {
          </a>`
       : `<span style="color:var(--text-3);font-size:11px;">—</span>`;
     return `<tr>
+      <td style="text-align:center;"><input type="checkbox" class="ts-bulk-row" value="${escapeHtml(t.id)}" onchange="updateTsBulkActionBar()" style="cursor:pointer;" aria-label="Select row"></td>
       <td><strong>${escapeHtml(cons?.name||'—')}</strong></td>
       <td>${escapeHtml(cli?.name||'—')}</td>
       <td class="mono" style="font-size:11px;">${cyc ? fmtDate(cyc.start_date)+' - '+fmtDate(cyc.end_date) : '—'}</td>
@@ -4220,6 +4250,56 @@ async function loadAllTimesheets() {
       </td>
     </tr>`;
   }).join('');
+  updateTsBulkActionBar();
+}
+
+function onTsBulkSelectAll(master) {
+  document.querySelectorAll('input.ts-bulk-row').forEach(ch => {
+    ch.checked = master.checked;
+  });
+  master.indeterminate = false;
+  updateTsBulkActionBar();
+}
+
+function syncTsBulkSelectAllMaster() {
+  const master = document.getElementById('ts-bulk-select-all');
+  if (!master) return;
+  const rowCh = [...document.querySelectorAll('input.ts-bulk-row')];
+  if (!rowCh.length) {
+    master.checked = false;
+    master.indeterminate = false;
+    return;
+  }
+  const n = rowCh.filter(ch => ch.checked).length;
+  master.checked = n === rowCh.length;
+  master.indeterminate = n > 0 && n < rowCh.length;
+}
+
+function updateTsBulkActionBar() {
+  const ids = [...document.querySelectorAll('input.ts-bulk-row:checked')].map(ch => ch.value);
+  const n = ids.length;
+  const bar = document.getElementById('ts-bulk-bar');
+  const btn = document.getElementById('ts-bulk-delete-btn');
+  const lbl = document.getElementById('ts-bulk-count');
+  if (btn) btn.disabled = n === 0;
+  if (lbl) lbl.textContent = n === 1 ? '1 selected' : `${n} selected`;
+  if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
+  syncTsBulkSelectAllMaster();
+}
+
+async function bulkDeleteTs() {
+  const ids = [...document.querySelectorAll('input.ts-bulk-row:checked')].map(ch => ch.value).filter(Boolean);
+  if (!ids.length) {
+    toast('Select one or more timesheets first.', 'error');
+    return;
+  }
+  if (!confirm(`Delete ${ids.length} timesheet ${ids.length === 1 ? 'entry' : 'entries'}? This cannot be undone.`)) return;
+  const { ok } = await unwrapSupabase('Delete timesheets', sb.from('timesheets').delete().in('id', ids));
+  if (!ok) return;
+  toast(ids.length === 1 ? 'Timesheet deleted.' : `${ids.length} timesheets deleted.`);
+  await fetchTimesheets();
+  loadAllTimesheets();
+  updateMissingTsBadge();
 }
 
 function jumpToEditTs(tsId) {
