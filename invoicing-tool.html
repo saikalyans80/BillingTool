@@ -625,13 +625,12 @@
             <div class="card-header"><span style="font-weight:600;">Google Sheets Integration</span></div>
             <div class="card-body">
               <p style="font-size:12px;color:var(--text-2);margin-bottom:14px;line-height:1.6;">
-                Connect your Google account to import timesheets from a Google Sheet.
-                The Sheet should have columns: <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px;">Consultant Name, Client Name, Week Ending, Hours (per day or total), Proof URL</code>.
+                Connect your Google account to import timesheets from a Google Sheet. Column titles can differ from the examples below—the import wizard maps your headers (e.g. <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px;">Candidate Name (Last Name, First Name)</code>, daily hour columns, proof link). Use an optional column range such as <code style="background:var(--surface-3);padding:1px 5px;border-radius:3px;">B:L</code> when extra columns sit to the left or right.
               </p>
               <div class="form-group">
                 <label class="form-label">Google OAuth Client ID</label>
                 <input type="text" id="gs-client-id" class="form-control" placeholder="xxxx.apps.googleusercontent.com">
-                <p style="font-size:11px;color:var(--text-3);margin-top:4px;">From Google Cloud Console → APIs &amp; Services → Credentials → OAuth 2.0 Client IDs</p>
+                <p style="font-size:11px;color:var(--text-3);margin-top:4px;">From Google Cloud Console → APIs &amp; Services → Credentials → OAuth 2.0 Client IDs (type: Web application). Enable the Google Sheets API for the project. Under the client, add this page’s origin to <strong>Authorized JavaScript origins</strong> (e.g. <code style="background:var(--surface-3);padding:0 4px;border-radius:3px;">http://127.0.0.1:4173</code> or your production URL).</p>
               </div>
               <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                 <button class="btn btn-primary" onclick="saveGsClientId()">Save</button>
@@ -922,9 +921,13 @@
             <input type="text" id="gs-sheet-tab" class="form-control" placeholder="Sheet1">
           </div>
           <div class="form-group" style="margin-bottom:0;">
-            <label class="form-label">Header Row <span style="font-weight:400;color:var(--text-3);">(default: 1)</span></label>
+            <label class="form-label">Header Row <span style="font-weight:400;color:var(--text-3);">(row that contains column titles)</span></label>
             <input type="number" id="gs-header-row" class="form-control" value="1" min="1">
           </div>
+        </div>
+        <div class="form-group" style="margin-top:12px;margin-bottom:0;">
+          <label class="form-label">Data columns <span style="font-weight:400;color:var(--text-3);">(optional, e.g. B:L if titles and hours are in B through L)</span></label>
+          <input type="text" id="gs-column-range" class="form-control" placeholder="B:L or leave blank for A:Z">
         </div>
         <div style="margin-top:14px;">
           <button class="btn btn-primary" onclick="fetchGsPreview()">
@@ -2959,6 +2962,9 @@ async function loadSettings() {
   const appNameEl = document.getElementById('app-display-name');
   if (appNameEl) appNameEl.value = map['app_display_name'] || '';
   applyAppDisplayName(map['app_display_name'] || '');
+  const gsc = document.getElementById('gs-client-id');
+  if (gsc) gsc.value = map['google_sheets_client_id'] || '';
+  gsRefreshAuthStatus();
 }
 
 async function saveSettings() {
@@ -2984,6 +2990,456 @@ async function checkPendingOnLogin() {
   toast(`📧 ${_pendingInvoices.length} pending invoice(s) — notification email queued to ${data.value}`, 'success');
   // To wire up real email: call your Supabase Edge Function here
   // await sb.functions.invoke('send-pending-email', { body: { to: data.value, count: _pendingInvoices.length } });
+}
+
+// ============================================================
+//  GOOGLE SHEETS — TIMESHEET IMPORT
+// ============================================================
+const GS_TOKEN_KEY = 'invoicing_gs_at';
+const GS_TOKEN_EXP_KEY = 'invoicing_gs_exp';
+const GS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly';
+
+let _gsImportState = null;
+
+function getGsAccessToken() {
+  const t = sessionStorage.getItem(GS_TOKEN_KEY);
+  const exp = parseInt(sessionStorage.getItem(GS_TOKEN_EXP_KEY) || '0', 10);
+  if (!t || Date.now() > exp - 60_000) return null;
+  return t;
+}
+
+function gsRefreshAuthStatus() {
+  const el = document.getElementById('gs-auth-status');
+  if (!el) return;
+  if (getGsAccessToken()) {
+    el.textContent = 'Authorized for this browser session';
+    el.style.color = 'var(--success)';
+  } else {
+    el.textContent = '';
+    el.style.color = 'var(--text-3)';
+  }
+}
+
+function parseSpreadsheetId(raw) {
+  const s = String(raw || '').trim();
+  const m = /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/.exec(s);
+  if (m) return m[1];
+  if (/^[a-zA-Z0-9-_]{20,}$/.test(s)) return s;
+  return null;
+}
+
+function gsParseColumnRange(input) {
+  const s = String(input || '').trim().toUpperCase();
+  if (!s) return { start: 'A', end: 'Z' };
+  const m = /^([A-Z]{1,3}):([A-Z]{1,3})$/.exec(s);
+  if (!m) return null;
+  if (m[1] > m[2]) return { start: m[2], end: m[1] };
+  return { start: m[1], end: m[2] };
+}
+
+function gsQuoteSheetName(name) {
+  return `'${String(name).replace(/'/g, "''")}'`;
+}
+
+function gsNormalizeHeaderLabel(h) {
+  return String(h || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function gsGuessFieldFromHeader(h) {
+  const s = gsNormalizeHeaderLabel(h);
+  if (!s) return '';
+  if (/upload\s+proof|proof\s+of|proof\s+url|^proof$|approved\s+timesheet/.test(s)) return 'proof';
+  if (/week\s*ending|ending\s*date|\bfriday\b.*\bdate\b|\bdate\b.*\bfriday\b/.test(s)) return 'week_ending';
+  if (/^client(\s+name)?$/.test(s) || s === 'client name' || /\bclient\s+name\b/.test(s)) return 'client';
+  if (/\bcandidate\b|\bconsultant\b/.test(s)) return 'consultant';
+  if (/\btotal\b.*\bhour|\bhours?\b.*\btotal\b/.test(s)) return 'total_hours';
+  if (/\bnotes?\b/.test(s)) return 'notes';
+  if (/\bsaturday\b|^sat\b|\bsat\b/.test(s)) return 'sat';
+  if (/\bsunday\b|^sun\b/.test(s)) return 'sun';
+  if (/\bmonday\b|^mon\b/.test(s)) return 'mon';
+  if (/\btuesday\b|^tue\b/.test(s)) return 'tue';
+  if (/\bwednesday\b|^wed\b/.test(s)) return 'wed';
+  if (/\bthursday\b|^thu\b/.test(s)) return 'thu';
+  if (/\bfriday\b|^fri\b/.test(s)) return 'fri';
+  return '';
+}
+
+function parseSheetDate(val) {
+  if (val == null || val === '') return null;
+  if (typeof val === 'number' && !isNaN(val)) {
+    const epoch = Date.UTC(1899, 11, 30);
+    const ms = epoch + Math.round(val) * 86400000;
+    return new Date(ms).toISOString().split('T')[0];
+  }
+  const s = String(val).trim();
+  const m1 = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(s);
+  if (m1) {
+    let d = +m1[1], mo = +m1[2], y = +m1[3];
+    if (y < 100) y += 2000;
+    return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+  return null;
+}
+
+function parseSheetHours(v) {
+  if (v == null || v === '') return 0;
+  if (typeof v === 'number' && !isNaN(v)) return v;
+  const n = parseFloat(String(v).replace(/,/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+
+function findConsultantIdByImportName(raw) {
+  const k = normalizeConsultantNameKey(raw);
+  if (!k) return null;
+  let c = _consultants.find(x => normalizeConsultantNameKey(x.name) === k);
+  if (c) return c.id;
+  const parts = String(raw).split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    const firstLast = `${parts[1]} ${parts[0]}`;
+    c = _consultants.find(x => normalizeConsultantNameKey(x.name) === normalizeConsultantNameKey(firstLast));
+    if (c) return c.id;
+    const lastFirst = `${parts[0]} ${parts[1]}`;
+    c = _consultants.find(x => normalizeConsultantNameKey(x.name) === normalizeConsultantNameKey(lastFirst));
+    if (c) return c.id;
+  }
+  return null;
+}
+
+function findClientIdByImportName(raw) {
+  const k = normalizeConsultantNameKey(raw);
+  if (!k) return null;
+  const c = _clients.find(x => normalizeConsultantNameKey(x.name) === k);
+  return c ? c.id : null;
+}
+
+function resolveBillingCycleForTimesheetImport(consId, clientId, weekEnding) {
+  const we = snapToFriday(weekEnding);
+  const weekStart = new Date(we + 'T00:00:00');
+  weekStart.setDate(weekStart.getDate() - 6);
+  const weekStartStr = weekStart.toISOString().split('T')[0];
+  let candidateCycles = clientId ? _cycles.filter(c => c.client_id === clientId) : _cycles;
+  if (consId) {
+    const assignedIds = _assignments.filter(a => a.consultant_id === consId).map(a => a.billing_cycle_id);
+    const assignedMatches = candidateCycles.filter(c => assignedIds.includes(c.id));
+    if (assignedMatches.length) candidateCycles = assignedMatches;
+  }
+  const matched = candidateCycles.find(c => we >= c.start_date && we <= c.end_date)
+    || candidateCycles.find(c => weekStartStr >= c.start_date && weekStartStr <= c.end_date);
+  return matched ? matched.id : null;
+}
+
+async function saveGsClientId() {
+  if (!sb) { toast('Sign in first', 'error'); return; }
+  const cid = document.getElementById('gs-client-id').value.trim();
+  const { ok } = await unwrapSupabase('Save Google client ID', sb.from('settings').upsert(
+    { key: 'google_sheets_client_id', value: cid },
+    { onConflict: 'key' }
+  ));
+  if (ok) toast('Google OAuth Client ID saved');
+}
+
+function authorizeGoogleSheets() {
+  const clientId = document.getElementById('gs-client-id').value.trim();
+  if (!clientId) { toast('Paste your OAuth Client ID and click Save first', 'error'); return; }
+  if (!window.google?.accounts?.oauth2) {
+    toast('Google sign-in script not ready — wait a few seconds and try again', 'error');
+    return;
+  }
+  const tc = google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: GS_SCOPE,
+    callback: (resp) => {
+      const st = document.getElementById('gs-auth-status');
+      if (resp.error) {
+        if (st) { st.textContent = resp.error; st.style.color = 'var(--danger)'; }
+        return;
+      }
+      if (!resp.access_token) return;
+      sessionStorage.setItem(GS_TOKEN_KEY, resp.access_token);
+      const sec = resp.expires_in || 3600;
+      sessionStorage.setItem(GS_TOKEN_EXP_KEY, String(Date.now() + sec * 1000));
+      if (st) {
+        st.textContent = 'Authorized for this browser session';
+        st.style.color = 'var(--success)';
+      }
+      toast('Google account connected');
+    },
+  });
+  tc.requestAccessToken({ prompt: 'consent' });
+}
+
+function openGsImportModal() {
+  document.getElementById('gs-step-1').style.display = '';
+  document.getElementById('gs-step-2').style.display = 'none';
+  document.getElementById('gs-import-btn').style.display = 'none';
+  document.getElementById('gs-map-hint').style.display = 'none';
+  document.getElementById('gs-import-status').textContent = '';
+  document.getElementById('gs-import-count').textContent = '';
+  document.getElementById('gs-preview-head').innerHTML = '';
+  document.getElementById('gs-preview-body').innerHTML = '';
+  document.getElementById('gs-col-map').innerHTML = '';
+  _gsImportState = null;
+  gsRefreshAuthStatus();
+  openModal('gs-import-modal');
+}
+
+async function gsFetchFirstSheetTitle(spreadsheetId, token) {
+  const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties.title`, {
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error?.message || 'Could not read spreadsheet');
+  const t = j.sheets?.[0]?.properties?.title;
+  if (!t) throw new Error('Spreadsheet has no tabs');
+  return t;
+}
+
+async function gsFetchValuesRange(spreadsheetId, a1Range, token) {
+  const enc = encodeURIComponent(a1Range);
+  const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${enc}`, {
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error?.message || 'Could not read sheet range');
+  return j.values || [];
+}
+
+function gsPadRows(values, width) {
+  return values.map(row => {
+    const out = row ? row.slice() : [];
+    while (out.length < width) out.push('');
+    return out;
+  });
+}
+
+const GS_FIELD_OPTIONS = [
+  { value: '', label: '(Ignore)' },
+  { value: 'consultant', label: 'Consultant / candidate name' },
+  { value: 'client', label: 'Client name' },
+  { value: 'week_ending', label: 'Week ending date' },
+  { value: 'sat', label: 'Saturday hours' },
+  { value: 'sun', label: 'Sunday hours' },
+  { value: 'mon', label: 'Monday hours' },
+  { value: 'tue', label: 'Tuesday hours' },
+  { value: 'wed', label: 'Wednesday hours' },
+  { value: 'thu', label: 'Thursday hours' },
+  { value: 'fri', label: 'Friday hours' },
+  { value: 'total_hours', label: 'Total hours (single column)' },
+  { value: 'proof', label: 'Proof / document URL' },
+  { value: 'notes', label: 'Notes' },
+];
+
+function gsBuildColumnMapUI(headers) {
+  const wrap = document.getElementById('gs-col-map');
+  wrap.innerHTML = headers.map((h, i) => {
+    const guess = gsGuessFieldFromHeader(h);
+    const opts = GS_FIELD_OPTIONS.map(o => `<option value="${escapeHtml(o.value)}"${o.value === guess ? ' selected' : ''}>${escapeHtml(o.label)}</option>`).join('');
+    return `<div class="form-group" style="margin-bottom:8px;">
+      <label class="form-label" style="font-size:11px;">Col ${i + 1}: ${escapeHtml(h || '(empty)')}</label>
+      <select class="form-control gs-map-select" data-col="${i}" style="font-size:12px;">${opts}</select>
+    </div>`;
+  }).join('');
+}
+
+function gsValidateMapping() {
+  const fieldToCol = {};
+  document.querySelectorAll('#gs-col-map select.gs-map-select').forEach(sel => {
+    const f = sel.value;
+    if (!f) return;
+    fieldToCol[f] = parseInt(sel.getAttribute('data-col'), 10);
+  });
+  const hasCons = fieldToCol.consultant != null;
+  const hasWeek = fieldToCol.week_ending != null;
+  const hasDays = ['sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri'].some(d => fieldToCol[d] != null);
+  const hasTotal = fieldToCol.total_hours != null;
+  const ok = hasCons && hasWeek && (hasDays || hasTotal);
+  const hint = document.getElementById('gs-map-hint');
+  hint.style.display = ok ? 'none' : '';
+  return ok;
+}
+
+async function fetchGsPreview() {
+  const token = getGsAccessToken();
+  if (!token) {
+    toast('Authorize Google in Settings first', 'error');
+    return;
+  }
+  const rawUrl = document.getElementById('gs-sheet-url').value.trim();
+  const spreadsheetId = parseSpreadsheetId(rawUrl);
+  if (!spreadsheetId) {
+    toast('Paste a valid Google Sheet URL or spreadsheet ID', 'error');
+    return;
+  }
+  const colSpec = gsParseColumnRange(document.getElementById('gs-column-range').value);
+  if (!colSpec) {
+    toast('Data columns must look like B:L (letters only)', 'error');
+    return;
+  }
+  const headerRow = Math.max(1, parseInt(document.getElementById('gs-header-row').value, 10) || 1);
+  let tab = document.getElementById('gs-sheet-tab').value.trim();
+  const spin = document.getElementById('gs-fetch-spinner');
+  spin.style.display = 'inline';
+  try {
+    if (!tab) tab = await gsFetchFirstSheetTitle(spreadsheetId, token);
+    const a1 = `${gsQuoteSheetName(tab)}!${colSpec.start}${headerRow}:${colSpec.end}`;
+    const values = await gsFetchValuesRange(spreadsheetId, a1, token);
+    if (!values.length) {
+      toast('No rows found in that range', 'error');
+      return;
+    }
+    const width = values.reduce((w, r) => Math.max(w, (r || []).length), 0);
+    const padded = gsPadRows(values, width);
+    const headerPadded = (padded[0] || []).map(c => String(c == null ? '' : c).trim());
+    const dataRows = padded.slice(1).filter(row => row.some(c => String(c).trim() !== ''));
+    _gsImportState = {
+      spreadsheetId,
+      tab,
+      headerRow,
+      colSpec,
+      headers: headerPadded,
+      dataRows,
+    };
+    gsBuildColumnMapUI(headerPadded);
+    document.querySelectorAll('#gs-col-map select.gs-map-select').forEach(sel => {
+      sel.addEventListener('change', gsValidateMapping);
+    });
+    gsValidateMapping();
+    const prevHead = document.getElementById('gs-preview-head');
+    const prevBody = document.getElementById('gs-preview-body');
+    prevHead.innerHTML = '<tr>' + headerPadded.map(h => `<th>${escapeHtml(h || '—')}</th>`).join('') + '</tr>';
+    prevBody.innerHTML = dataRows.slice(0, 10).map(row =>
+      '<tr>' + row.map(c => `<td>${escapeHtml(String(c))}</td>`).join('') + '</tr>'
+    ).join('');
+    document.getElementById('gs-step-2').style.display = '';
+    document.getElementById('gs-import-btn').style.display = '';
+    document.getElementById('gs-import-count').textContent = `${dataRows.length} data row(s) loaded`;
+    document.getElementById('gs-import-status').textContent = `Tab: ${tab} — range starts row ${headerRow}`;
+    toast('Sheet loaded — confirm column mapping, then import');
+  } catch (e) {
+    console.error(e);
+    toast(e.message || 'Failed to load sheet', 'error');
+  } finally {
+    spin.style.display = 'none';
+  }
+}
+
+function gsCollectFieldToCol() {
+  const m = {};
+  document.querySelectorAll('#gs-col-map select.gs-map-select').forEach(sel => {
+    const f = sel.value;
+    if (!f) return;
+    m[f] = parseInt(sel.getAttribute('data-col'), 10);
+  });
+  return m;
+}
+
+function gsCell(row, colIdx) {
+  if (!row || colIdx == null || colIdx < 0) return '';
+  return row[colIdx] != null ? row[colIdx] : '';
+}
+
+async function runGsImport() {
+  if (!_gsImportState?.dataRows?.length) {
+    toast('Load the sheet first', 'error');
+    return;
+  }
+  if (!gsValidateMapping()) {
+    toast('Fix column mapping (consultant, week ending, and hours)', 'error');
+    return;
+  }
+  const fc = gsCollectFieldToCol();
+  const days = ['sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri'];
+  const payloads = [];
+  const errors = [];
+  for (let ri = 0; ri < _gsImportState.dataRows.length; ri++) {
+    const row = _gsImportState.dataRows[ri];
+    const sheetRowNum = _gsImportState.headerRow + 1 + ri;
+    const consName = String(gsCell(row, fc.consultant)).trim();
+    const clientName = fc.client != null ? String(gsCell(row, fc.client)).trim() : '';
+    const weRaw = gsCell(row, fc.week_ending);
+    const weIso = parseSheetDate(weRaw);
+    if (!consName || !weIso) {
+      errors.push(`Row ${sheetRowNum}: missing consultant or week date`);
+      continue;
+    }
+    const we = snapToFriday(weIso);
+    const consId = findConsultantIdByImportName(consName);
+    if (!consId) {
+      errors.push(`Row ${sheetRowNum}: unknown consultant "${consName}"`);
+      continue;
+    }
+    const clientId = clientName ? findClientIdByImportName(clientName) : null;
+    if (clientName && !clientId) {
+      errors.push(`Row ${sheetRowNum}: unknown client "${clientName}"`);
+      continue;
+    }
+    const cycId = resolveBillingCycleForTimesheetImport(consId, clientId, we);
+    if (!cycId) {
+      errors.push(`Row ${sheetRowNum}: no billing cycle for ${fmtDate(we)}${clientName ? ' / ' + clientName : ''}`);
+      continue;
+    }
+    const cyc = _cycles.find(c => c.id === cycId);
+    const hours = { sat: 0, sun: 0, mon: 0, tue: 0, wed: 0, thu: 0, fri: 0 };
+    if (fc.total_hours != null) {
+      const t = parseSheetHours(gsCell(row, fc.total_hours));
+      hours.fri = t;
+    } else {
+      days.forEach(d => {
+        const ci = fc[d];
+        if (ci != null) hours[d] = parseSheetHours(gsCell(row, ci));
+      });
+    }
+    let proof = '';
+    if (fc.proof != null) proof = String(gsCell(row, fc.proof)).trim();
+    const proofUrl = safeHttpUrl(proof) || null;
+    let notes = '';
+    if (fc.notes != null) notes = String(gsCell(row, fc.notes)).trim();
+    if (fc.total_hours != null && !days.some(d => fc[d] != null)) {
+      notes = [notes, 'Imported: single total-hours column'].filter(Boolean).join(' — ');
+    }
+    const payload = {
+      consultant_id: consId,
+      billing_cycle_id: cycId,
+      client_id: clientId || cyc?.client_id,
+      week_ending: we,
+      sat_hours: hours.sat,
+      sun_hours: hours.sun,
+      mon_hours: hours.mon,
+      tue_hours: hours.tue,
+      wed_hours: hours.wed,
+      thu_hours: hours.thu,
+      fri_hours: hours.fri,
+      notes: notes || null,
+      proof_url: proofUrl,
+    };
+    payloads.push(payload);
+  }
+  if (payloads.length === 0) {
+    toast(errors.slice(0, 5).join('; ') || 'Nothing to import', 'error');
+    return;
+  }
+  const { ok, error } = await unwrapSupabaseQuiet(
+    sb.from('timesheets').upsert(payloads, { onConflict: 'consultant_id,billing_cycle_id,week_ending' })
+  );
+  if (!ok) {
+    toast('Import failed: ' + (error?.message || 'unknown error'), 'error');
+    return;
+  }
+  await fetchTimesheets();
+  loadAllTimesheets();
+  updateMissingTsBadge();
+  closeModal('gs-import-modal');
+  const msg = `Imported ${payloads.length} timesheet row(s)`;
+  let ex = errors.length ? ` — skipped ${errors.length}` : '';
+  if (errors.length) {
+    const sample = errors.slice(0, 2).join('; ');
+    ex += sample ? ` (${sample}${errors.length > 2 ? '…' : ''})` : '';
+    console.warn('[GS import] skipped rows:', errors);
+  }
+  toast(msg + ex);
 }
 
 // ============================================================
@@ -3545,6 +4001,7 @@ CREATE TABLE IF NOT EXISTS timesheets (
   thu_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
   fri_hours NUMERIC(5,2) NOT NULL DEFAULT 0,
   notes TEXT,
+  proof_url TEXT,
   submitted_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(consultant_id, billing_cycle_id, week_ending)
 );
