@@ -573,6 +573,8 @@
                 <div class="form-group"><label class="form-label">Consultant</label><select id="tsf-consultant" class="form-control" onchange="loadAllTimesheets()"><option value="">All Consultants</option></select></div>
                 <div class="form-group"><label class="form-label">Client</label><select id="tsf-client" class="form-control" onchange="loadAllTimesheets()"><option value="">All Clients</option></select></div>
                 <div class="form-group"><label class="form-label">Billing Cycle</label><select id="tsf-cycle" class="form-control" onchange="loadAllTimesheets()"><option value="">All Cycles</option></select></div>
+                <div class="form-group"><label class="form-label">From</label><input type="date" id="tsf-from" class="form-control" title="Calendar start (inclusive). Rows included if that week’s Sat–Fri overlaps this range." onchange="loadAllTimesheets()"></div>
+                <div class="form-group"><label class="form-label">To</label><input type="date" id="tsf-to" class="form-control" title="Calendar end (inclusive). Same overlap rule as From." onchange="loadAllTimesheets()"></div>
                 <div class="form-group"><label class="form-label">&nbsp;</label><button class="btn btn-secondary" onclick="clearTsFilters()">Clear</button></div>
               </div>
             </div>
@@ -3782,6 +3784,39 @@ function snapToFriday(dateStr) {
   return d.toISOString().split('T')[0];
 }
 
+/** ISO YYYY-MM-DD plus delta calendar days (noon anchor avoids DST edge cases). */
+function addDaysIso(dateStr, deltaDays) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + deltaDays);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * True if the timesheet week (Sat through Fri where week_ending is Friday) overlaps [fromStr, toStr] inclusive on the calendar.
+ * If only one bound is set, the range is open on that side. If from is after to, bounds are swapped.
+ */
+function timesheetOverlapsDateRange(weekEndingIso, fromStr, toStr) {
+  const we = String(weekEndingIso || '');
+  if (!we) return false;
+  const weekStart = addDaysIso(we, -6);
+  const weekEnd = we;
+  if (!fromStr && !toStr) return true;
+  let lo = fromStr || '';
+  let hi = toStr || '';
+  if (lo && hi && lo > hi) {
+    const t = lo;
+    lo = hi;
+    hi = t;
+  }
+  if (lo && weekEnd < lo) return false;
+  if (hi && weekStart > hi) return false;
+  return true;
+}
+
 // Get all Fridays (week-ending dates) that fall within a billing cycle
 function getFridaysInCycle(cycleStart, cycleEnd) {
   const fridays = [];
@@ -4122,10 +4157,15 @@ async function loadAllTimesheets() {
   const consFilter = document.getElementById('tsf-consultant')?.value || '';
   const cliFilter  = document.getElementById('tsf-client')?.value || '';
   const cycFilter  = document.getElementById('tsf-cycle')?.value || '';
+  const fromFilter = document.getElementById('tsf-from')?.value || '';
+  const toFilter   = document.getElementById('tsf-to')?.value || '';
   let rows = _timesheets;
   if (consFilter) rows = rows.filter(t => t.consultant_id === consFilter);
   if (cliFilter)  rows = rows.filter(t => t.client_id    === cliFilter);
   if (cycFilter)  rows = rows.filter(t => t.billing_cycle_id === cycFilter);
+  if (fromFilter || toFilter) {
+    rows = rows.filter(t => timesheetOverlapsDateRange(t.week_ending, fromFilter, toFilter));
+  }
   const tbody = document.getElementById('all-timesheets-body');
   const listWarn = document.getElementById('ts-duplicate-list-warning');
   if (rows.length === 0) {
@@ -4213,6 +4253,10 @@ function clearTsFilters() {
   document.getElementById('tsf-consultant').value = '';
   document.getElementById('tsf-client').value = '';
   document.getElementById('tsf-cycle').value = '';
+  const f = document.getElementById('tsf-from');
+  const t = document.getElementById('tsf-to');
+  if (f) f.value = '';
+  if (t) t.value = '';
   loadAllTimesheets();
 }
 
