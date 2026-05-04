@@ -1143,6 +1143,47 @@ async function unwrapSupabaseQuiet(promise) {
   return { ok: true, data, error: null };
 }
 
+/** True when PostgREST has no timesheets.proof_url (migration not applied on project). */
+let _timesheetsOmitProofUrl = false;
+let _warnedTimesheetsProofUrlMissing = false;
+
+function isMissingTimesheetProofUrlColumnError(err) {
+  const m = String(err?.message || err || '');
+  return /\bproof_url\b/i.test(m) && (/schema cache/i.test(m) || /could not find/i.test(m));
+}
+
+function timesheetRowsWithoutProofUrl(rows) {
+  return rows.map(r => {
+    if (!r || typeof r !== 'object') return r;
+    const { proof_url, ...rest } = r;
+    return rest;
+  });
+}
+
+/**
+ * Upsert timesheet rows. Retries without proof_url if the DB has no column (then caches for the session).
+ * To store proof links, run: supabase/migrations/20260504140000_timesheets_proof_url.sql (or full baseline).
+ */
+async function upsertTimesheetsMaybeProofUrl(label, rows, upsertOpts) {
+  const opts = upsertOpts || { onConflict: 'consultant_id,billing_cycle_id,week_ending' };
+  let payload = _timesheetsOmitProofUrl ? timesheetRowsWithoutProofUrl(rows) : rows;
+  let { data, error } = await sb.from('timesheets').upsert(payload, opts);
+  if (error && !_timesheetsOmitProofUrl && isMissingTimesheetProofUrlColumnError(error)) {
+    _timesheetsOmitProofUrl = true;
+    ({ data, error } = await sb.from('timesheets').upsert(timesheetRowsWithoutProofUrl(rows), opts));
+    if (!error && !_warnedTimesheetsProofUrlMissing) {
+      _warnedTimesheetsProofUrlMissing = true;
+      toast('This database has no timesheets.proof_url column, so proof links from import were not saved. In Supabase SQL editor run: ALTER TABLE timesheets ADD COLUMN IF NOT EXISTS proof_url TEXT; then reload this page.', 'warning');
+    }
+  }
+  if (error) {
+    console.error('[InvoiceFlow]', label, error);
+    toast(label + ': ' + error.message, 'error');
+    return { ok: false, data: null, error };
+  }
+  return { ok: true, data, error: null };
+}
+
 let _loadAllDataPromise = null;
 
 // ============================================================
@@ -3658,10 +3699,9 @@ async function runGsImport() {
   if (importDupMerged > 0) {
     toast(`Warning: ${importDupMerged} duplicate import row(s) (same consultant, cycle, and week) were merged; the last row wins.`, 'warning');
   }
-  const up = await unwrapSupabase(
-    'Import timesheets',
-    sb.from('timesheets').upsert(dedupedPayloads, { onConflict: 'consultant_id,billing_cycle_id,week_ending' })
-  );
+  const up = await upsertTimesheetsMaybeProofUrl('Import timesheets', dedupedPayloads, {
+    onConflict: 'consultant_id,billing_cycle_id,week_ending',
+  });
   if (!up.ok) {
     return;
   }
