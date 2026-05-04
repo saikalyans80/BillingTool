@@ -964,7 +964,7 @@
       <div id="gs-step-3" style="display:none;margin-top:16px;">
         <p style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px;">Assign client for each consultant</p>
         <p style="font-size:11px;color:var(--text-3);margin-bottom:12px;line-height:1.5;">
-          Choose which client each person’s rows should import under (used to match billing cycles). This overrides the sheet’s client column for import. Use the <strong>Action</strong> dropdown: <strong>Skip</strong> opts a candidate out so none of their rows are imported. Consultants from the sheet who are not in your directory never appear here.
+          Choose which client each person’s rows should import under (used to match billing cycles). This overrides the sheet’s client column for import. Use <strong>Skip all</strong> to mark every matched consultant as skipped, then <strong>uncheck Skip</strong> on the rows you want to import. You can also tick or untick Skip per person. Consultants from the sheet who are not in your directory never appear here.
         </p>
         <div id="gs-client-pick-body" class="bulk-preview-box" style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:12px;"></div>
       </div>
@@ -3437,14 +3437,38 @@ function gsDefaultClientIdForPick(consId, sheetClientLabels) {
   return '';
 }
 
-function gsOnRowActionChange(actionSel) {
-  const id = actionSel.getAttribute('data-consultant-id');
+function gsApplySkipToClientPickRow(consId, skip) {
+  const sel = document.querySelector(`select.gs-client-pick-select[data-consultant-id="${consId}"]`);
+  if (!sel) return;
+  sel.disabled = skip;
+  sel.style.opacity = skip ? '0.55' : '';
+}
+
+function gsToggleSkipClientPick(chk) {
+  const id = chk.getAttribute('data-consultant-id');
   if (!id) return;
-  const clientSel = document.querySelector(`select.gs-client-pick-select[data-consultant-id="${id}"]`);
-  if (!clientSel) return;
-  const skip = actionSel.value === 'skip';
-  clientSel.disabled = skip;
-  clientSel.style.opacity = skip ? '0.55' : '';
+  gsApplySkipToClientPickRow(id, chk.checked);
+  gsSyncSkipAllMasterFromRows();
+}
+
+function gsOnSkipAllChange(master) {
+  const on = master.checked;
+  master.indeterminate = false;
+  document.querySelectorAll('input.gs-skip-consultant').forEach(ch => {
+    ch.checked = on;
+    const id = ch.getAttribute('data-consultant-id');
+    if (id) gsApplySkipToClientPickRow(id, on);
+  });
+}
+
+function gsSyncSkipAllMasterFromRows() {
+  const master = document.getElementById('gs-skip-all');
+  if (!master) return;
+  const rows = [...document.querySelectorAll('input.gs-skip-consultant')];
+  if (!rows.length) return;
+  const nSkip = rows.filter(ch => ch.checked).length;
+  master.indeterminate = nSkip > 0 && nSkip < rows.length;
+  master.checked = nSkip === rows.length;
 }
 
 function gsRenderClientPickRows(entries) {
@@ -3453,20 +3477,24 @@ function gsRenderClientPickRows(entries) {
     host.innerHTML = '<p style="color:var(--danger);font-size:12px;margin:0;">No sheet rows match a consultant in your app. Check names or add consultants first.</p>';
     return;
   }
-  host.innerHTML = entries.map(e => {
+  const bar = `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text-2);white-space:nowrap;margin:0;">
+      <input type="checkbox" id="gs-skip-all" onchange="gsOnSkipAllChange(this)"> Skip all
+    </label>
+    <span style="font-size:11px;color:var(--text-3);line-height:1.4;">Uncheck <strong>Skip</strong> on a row below to include that consultant’s timesheet rows in the import.</span>
+  </div>`;
+  const rows = entries.map(e => {
     const pool = gsClientsForConsultant(e.consId);
     const def = gsDefaultClientIdForPick(e.consId, e.sheetClientLabels);
     const opts = pool.map(c =>
       `<option value="${c.id}"${c.id === def ? ' selected' : ''}>${escapeHtml(c.name)}</option>`
     ).join('');
     const hint = [...e.sheetClientLabels].filter(Boolean).join(', ') || '—';
-    return `<div style="display:grid;grid-template-columns:minmax(0,7.5rem) minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr);gap:10px;align-items:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">
-      <div class="form-group" style="margin:0;">
-        <label class="form-label" style="font-size:11px;">Action</label>
-        <select class="form-control gs-row-action-select" data-consultant-id="${e.consId}" style="font-size:12px;" onchange="gsOnRowActionChange(this)">
-          <option value="import" selected>Import</option>
-          <option value="skip">Skip</option>
-        </select>
+    return `<div style="display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr);gap:10px;align-items:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+      <div style="padding-top:14px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--text-2);white-space:nowrap;">
+          <input type="checkbox" class="gs-skip-consultant" data-consultant-id="${e.consId}" onchange="gsToggleSkipClientPick(this)"> Skip
+        </label>
       </div>
       <div><div style="font-size:10px;color:var(--text-3);">Consultant</div><div style="font-weight:600;font-size:13px;">${escapeHtml(e.consName)}</div></div>
       <div><div style="font-size:10px;color:var(--text-3);">Client name(s) in sheet</div><div style="font-size:12px;color:var(--text-2);word-break:break-word;">${escapeHtml(hint)}</div></div>
@@ -3478,6 +3506,7 @@ function gsRenderClientPickRows(entries) {
       </div>
     </div>`;
   }).join('');
+  host.innerHTML = bar + rows;
 }
 
 function gsGoToClientPickStep() {
@@ -3523,20 +3552,20 @@ async function runGsImport() {
     return;
   }
   if (!_gsImportState.pickStepDone) {
-    toast('Use “Next: Assign clients” and set Action + client for each consultant (or Skip)', 'error');
+    toast('Use “Next: Assign clients”, choose clients for imports, and use Skip / Skip all as needed', 'error');
     return;
   }
   const fc = gsCollectFieldToCol();
   const skipIds = new Set();
-  document.querySelectorAll('select.gs-row-action-select').forEach(asel => {
-    if (asel.value === 'skip') skipIds.add(asel.getAttribute('data-consultant-id'));
+  document.querySelectorAll('input.gs-skip-consultant:checked').forEach(ch => {
+    skipIds.add(ch.getAttribute('data-consultant-id'));
   });
   const picks = {};
   for (const sel of document.querySelectorAll('select.gs-client-pick-select')) {
     const cid = sel.getAttribute('data-consultant-id');
     if (skipIds.has(cid)) continue;
     if (!sel.value) {
-      toast('Select a client for each consultant you are importing, or set Action to Skip to opt out', 'error');
+      toast('Select a client for each consultant you are importing, or tick Skip to opt out that row', 'error');
       return;
     }
     picks[cid] = sel.value;
