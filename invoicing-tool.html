@@ -126,6 +126,7 @@
     .toast-msg { background: #0f172a; color: #e2e8f0; padding: 12px 18px; border-radius: 8px; font-size: 13px; margin-top: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: slideIn 0.2s ease; }
     .toast-msg.success { border-left: 3px solid #22c55e; }
     .toast-msg.error { border-left: 3px solid #ef4444; }
+    .toast-msg.warning { border-left: 3px solid #f59e0b; }
     @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
     /* Config banner */
@@ -501,6 +502,7 @@
                 <div class="form-group">
                   <label class="form-label">Client *</label>
                   <select id="ts-client" class="form-control" onchange="onTsClientChange()"><option value="">-- Select --</option></select>
+                  <p id="ts-client-hint" style="font-size:10px;color:var(--text-3);margin:4px 0 0;line-height:1.45;">Hours save to the billing cycle for the week you pick. If this person is not assigned yet, choose the client anyway—after you assign them to the same client and cycle, these timesheets are already linked.</p>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Week Ending (Friday) *</label>
@@ -511,6 +513,7 @@
                   <label class="form-label">Billing Cycle <span style="font-weight:400;color:var(--text-3);">(auto-detected)</span></label>
                   <div id="ts-cycle-detected" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text-3);background:var(--surface-2);">Select consultant, client and week ending first</div>
                   <input type="hidden" id="ts-cycle">
+                  <div id="ts-duplicate-entry-warning" style="display:none;margin-top:8px;padding:8px 10px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;font-size:11px;color:#92400e;line-height:1.45;"></div>
                 </div>
 
                 <div class="form-group">
@@ -582,6 +585,7 @@
                 Import from Google Sheets
               </button>
             </div>
+            <div id="ts-duplicate-list-warning" style="display:none;margin:0 20px 12px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:12px;color:#92400e;line-height:1.45;"></div>
             <div class="tbl-wrap">
               <table class="tbl">
                 <thead><tr><th>Consultant</th><th>Client</th><th>Billing Cycle</th><th>Week Ending</th><th>Sat</th><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Total</th><th>Proof</th><th>Notes</th><th>Actions</th></tr></thead>
@@ -960,7 +964,7 @@
       <div id="gs-step-3" style="display:none;margin-top:16px;">
         <p style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px;">Assign client for each consultant</p>
         <p style="font-size:11px;color:var(--text-3);margin-bottom:12px;line-height:1.5;">
-          Choose which client each person’s rows should import under (used to match billing cycles). This overrides the sheet’s client column for import. Consultants from the sheet who are not in your directory are skipped here.
+          Choose which client each person’s rows should import under (used to match billing cycles). This overrides the sheet’s client column for import. Tick <strong>Skip</strong> to opt out a candidate so none of their rows are imported. Consultants from the sheet who are not in your directory never appear here.
         </p>
         <div id="gs-client-pick-body" class="bulk-preview-box" style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:12px;"></div>
       </div>
@@ -3401,6 +3405,15 @@ function gsDefaultClientIdForPick(consId, sheetClientLabels) {
   return '';
 }
 
+function gsToggleSkipClientPick(chk) {
+  const id = chk.getAttribute('data-consultant-id');
+  if (!id) return;
+  const sel = document.querySelector(`select.gs-client-pick-select[data-consultant-id="${id}"]`);
+  if (!sel) return;
+  sel.disabled = chk.checked;
+  sel.style.opacity = chk.checked ? '0.55' : '';
+}
+
 function gsRenderClientPickRows(entries) {
   const host = document.getElementById('gs-client-pick-body');
   if (!entries.length) {
@@ -3414,7 +3427,12 @@ function gsRenderClientPickRows(entries) {
       `<option value="${c.id}"${c.id === def ? ' selected' : ''}>${escapeHtml(c.name)}</option>`
     ).join('');
     const hint = [...e.sheetClientLabels].filter(Boolean).join(', ') || '—';
-    return `<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.2fr);gap:10px;align-items:end;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+    return `<div style="display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr);gap:10px;align-items:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+      <div style="padding-top:14px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--text-2);white-space:nowrap;">
+          <input type="checkbox" class="gs-skip-consultant" data-consultant-id="${e.consId}" onchange="gsToggleSkipClientPick(this)"> Skip
+        </label>
+      </div>
       <div><div style="font-size:10px;color:var(--text-3);">Consultant</div><div style="font-weight:600;font-size:13px;">${escapeHtml(e.consName)}</div></div>
       <div><div style="font-size:10px;color:var(--text-3);">Client name(s) in sheet</div><div style="font-size:12px;color:var(--text-2);word-break:break-word;">${escapeHtml(hint)}</div></div>
       <div class="form-group" style="margin:0;">
@@ -3470,21 +3488,32 @@ async function runGsImport() {
     return;
   }
   if (!_gsImportState.pickStepDone) {
-    toast('Use “Next: Assign clients” and choose a client for each consultant', 'error');
+    toast('Use “Next: Assign clients” and choose a client for each consultant (or Skip)', 'error');
     return;
   }
   const fc = gsCollectFieldToCol();
+  const skipIds = new Set();
+  document.querySelectorAll('input.gs-skip-consultant:checked').forEach(ch => {
+    skipIds.add(ch.getAttribute('data-consultant-id'));
+  });
   const picks = {};
   for (const sel of document.querySelectorAll('select.gs-client-pick-select')) {
+    const cid = sel.getAttribute('data-consultant-id');
+    if (skipIds.has(cid)) continue;
     if (!sel.value) {
-      toast('Select a client for every consultant', 'error');
+      toast('Select a client for each consultant you are importing, or tick Skip to opt out', 'error');
       return;
     }
-    picks[sel.getAttribute('data-consultant-id')] = sel.value;
+    picks[cid] = sel.value;
+  }
+  if (skipIds.size > 0 && Object.keys(picks).length === 0 && skipIds.size === document.querySelectorAll('select.gs-client-pick-select').length) {
+    toast('All candidates are set to Skip — nothing to import', 'error');
+    return;
   }
   const days = ['sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri'];
   const payloads = [];
   const errors = [];
+  let skippedByUser = 0;
   for (let ri = 0; ri < _gsImportState.dataRows.length; ri++) {
     const row = _gsImportState.dataRows[ri];
     const sheetRowNum = _gsImportState.headerRow + 1 + ri;
@@ -3499,6 +3528,10 @@ async function runGsImport() {
     const consId = findConsultantIdByImportName(consName);
     if (!consId) {
       errors.push(`Row ${sheetRowNum}: unknown consultant "${consName}"`);
+      continue;
+    }
+    if (skipIds.has(consId)) {
+      skippedByUser++;
       continue;
     }
     const clientId = picks[consId] || null;
@@ -3549,11 +3582,20 @@ async function runGsImport() {
     payloads.push(payload);
   }
   if (payloads.length === 0) {
+    if (skippedByUser > 0 && errors.length === 0) {
+      closeModal('gs-import-modal');
+      toast(`No timesheets saved. ${skippedByUser} row(s) skipped (opted-out consultants).`, 'success');
+      return;
+    }
     toast(errors.slice(0, 5).join('; ') || 'Nothing to import', 'error');
     return;
   }
+  const { rows: dedupedPayloads, merged: importDupMerged } = dedupeTimesheetPayloadsForImport(payloads);
+  if (importDupMerged > 0) {
+    toast(`Warning: ${importDupMerged} duplicate import row(s) (same consultant, cycle, and week) were merged; the last row wins.`, 'warning');
+  }
   const { ok, error } = await unwrapSupabaseQuiet(
-    sb.from('timesheets').upsert(payloads, { onConflict: 'consultant_id,billing_cycle_id,week_ending' })
+    sb.from('timesheets').upsert(dedupedPayloads, { onConflict: 'consultant_id,billing_cycle_id,week_ending' })
   );
   if (!ok) {
     toast('Import failed: ' + (error?.message || 'unknown error'), 'error');
@@ -3563,14 +3605,14 @@ async function runGsImport() {
   loadAllTimesheets();
   updateMissingTsBadge();
   closeModal('gs-import-modal');
-  const msg = `Imported ${payloads.length} timesheet row(s)`;
-  let ex = errors.length ? ` — skipped ${errors.length}` : '';
+  const bits = [`Imported ${dedupedPayloads.length} timesheet row(s)`];
+  if (skippedByUser > 0) bits.push(`${skippedByUser} opted out`);
   if (errors.length) {
     const sample = errors.slice(0, 2).join('; ');
-    ex += sample ? ` (${sample}${errors.length > 2 ? '…' : ''})` : '';
+    bits.push(`${errors.length} skipped (errors${sample ? ': ' + sample + (errors.length > 2 ? '…' : '') : ''})`);
     console.warn('[GS import] skipped rows:', errors);
   }
-  toast(msg + ex);
+  toast(bits.join(' · '));
 }
 
 // ============================================================
@@ -3712,13 +3754,20 @@ async function loadTimesheets() {
 }
 
 function onTsConsultantChange() {
-  // Auto-filter client dropdown to only clients this consultant is assigned to
   const consId = document.getElementById('ts-consultant').value;
   const tsCli = document.getElementById('ts-client');
-  if (!consId) { tsCli.innerHTML = '<option value="">-- Select --</option>' + _clients.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join(''); return; }
+  if (!consId) {
+    tsCli.innerHTML = '<option value="">-- Select --</option>' + _clients.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+    document.getElementById('ts-cycle').value = '';
+    document.getElementById('ts-cycle-preview-card').style.display = 'none';
+    const dupW0 = document.getElementById('ts-duplicate-entry-warning');
+    if (dupW0) dupW0.style.display = 'none';
+    return;
+  }
   const clientIds = [...new Set(_assignments.filter(a => a.consultant_id === consId).map(a => { const cyc = _cycles.find(c => c.id === a.billing_cycle_id); return cyc?.client_id; }).filter(Boolean))];
-  tsCli.innerHTML = '<option value="">-- Select --</option>' + _clients.filter(c => clientIds.includes(c.id)).map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
-  document.getElementById('ts-cycle').innerHTML = '<option value="">-- Select Client First --</option>';
+  const pool = clientIds.length ? _clients.filter(c => clientIds.includes(c.id)) : _clients.slice();
+  tsCli.innerHTML = '<option value="">-- Select --</option>' + pool.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  document.getElementById('ts-cycle').value = '';
   document.getElementById('ts-cycle-preview-card').style.display = 'none';
 }
 
@@ -3772,7 +3821,11 @@ function onTsWeekEndingChange() {
   if (matched) {
     cycHidden.value = matched.id;
     const cli = _clients.find(c => c.id === matched.client_id);
-    detectedEl.innerHTML = `<span style="color:var(--text);font-weight:600;">${fmtDate(matched.start_date)} &rarr; ${fmtDate(matched.end_date)}</span>${matched.label ? ' &nbsp;<span style="color:var(--text-3);">('+escapeHtml(matched.label)+')</span>' : ''}${cli ? ' &nbsp;&mdash;&nbsp;<span style="color:var(--text-2);">'+escapeHtml(cli.name)+'</span>' : ''}`;
+    const noAssignmentYet = consId && !_assignments.some(a => a.consultant_id === consId && a.billing_cycle_id === matched.id);
+    const provisional = noAssignmentYet
+      ? ' <span style="font-size:10px;color:var(--text-3);font-weight:400;">(no assignment yet—hours still attach to this cycle for later billing)</span>'
+      : '';
+    detectedEl.innerHTML = `<span style="color:var(--text);font-weight:600;">${fmtDate(matched.start_date)} &rarr; ${fmtDate(matched.end_date)}</span>${matched.label ? ' &nbsp;<span style="color:var(--text-3);">('+escapeHtml(matched.label)+')</span>' : ''}${cli ? ' &nbsp;&mdash;&nbsp;<span style="color:var(--text-2);">'+escapeHtml(cli.name)+'</span>' : ''}${provisional}`;
     detectedEl.style.border = '1px solid var(--success)';
     detectedEl.style.background = 'var(--success-light)';
     warn.style.display = 'none';
@@ -3782,8 +3835,11 @@ function onTsWeekEndingChange() {
     }
     renderTsCycleCoverage();
     loadExistingTsEntry();
+    updateTsDuplicateEntryWarning();
   } else {
     cycHidden.value = '';
+    const dupEl = document.getElementById('ts-duplicate-entry-warning');
+    if (dupEl) dupEl.style.display = 'none';
     detectedEl.textContent = 'No billing cycle found for this week';
     detectedEl.style.border = '1px solid var(--danger)';
     detectedEl.style.background = 'var(--danger-light)';
@@ -3797,8 +3853,13 @@ async function loadExistingTsEntry() {
   const consId = document.getElementById('ts-consultant').value;
   const cycId  = document.getElementById('ts-cycle').value;
   const we     = document.getElementById('ts-week-ending').value;
-  if (!consId || !cycId || !we) return;
-  const existing = _timesheets.find(t => t.consultant_id === consId && t.billing_cycle_id === cycId && t.week_ending === we);
+  if (!consId || !cycId || !we) {
+    const w = document.getElementById('ts-duplicate-entry-warning');
+    if (w) w.style.display = 'none';
+    return;
+  }
+  const matches = _timesheets.filter(t => t.consultant_id === consId && t.billing_cycle_id === cycId && t.week_ending === we);
+  const existing = matches[0];
   if (existing) {
     document.getElementById('ts-edit-id').value = existing.id;
     document.getElementById('ts-sat').value = existing.sat_hours || 0;
@@ -3815,6 +3876,7 @@ async function loadExistingTsEntry() {
     document.getElementById('ts-notes').value = '';
   }
   updateTsTotal();
+  updateTsDuplicateEntryWarning();
 }
 
 function updateTsTotal() {
@@ -3836,6 +3898,8 @@ function clearTsForm() {
   det.style.color = 'var(--text-3)';
   document.getElementById('ts-cycle-warning').style.display = 'none';
   document.getElementById('ts-cycle-preview-card').style.display = 'none';
+  const dupW = document.getElementById('ts-duplicate-entry-warning');
+  if (dupW) dupW.style.display = 'none';
   updateTsTotal();
 }
 
@@ -3864,9 +3928,14 @@ async function saveTimesheet() {
     err = r.ok ? null : r.error;
   }
   if (err) { toast('Error saving timesheet: ' + err.message, 'error'); return; }
-  toast('Timesheet saved!');
+  if (!editId && _timesheets.some(t => t.consultant_id === consId && t.billing_cycle_id === cycId && t.week_ending === we)) {
+    toast('Timesheet saved (updated existing week).', 'warning');
+  } else {
+    toast('Timesheet saved!');
+  }
   await fetchTimesheets();
   renderTsCycleCoverage();
+  updateTsDuplicateEntryWarning();
   updateMissingTsBadge();
 }
 
@@ -3909,6 +3978,7 @@ function prefillTsWeek(fri) {
   document.getElementById('ts-notes').value = '';
   updateTsTotal();
   onTsWeekEndingChange();
+  updateTsDuplicateEntryWarning();
 }
 
 function editTsEntry(tsId, fri) {
@@ -3919,6 +3989,42 @@ function editTsEntry(tsId, fri) {
   ['sat','sun','mon','tue','wed','thu','fri'].forEach(d => document.getElementById('ts-'+d).value = ts[d+'_hours'] || 0);
   document.getElementById('ts-notes').value = ts.notes || '';
   updateTsTotal();
+  updateTsDuplicateEntryWarning();
+}
+
+function tsTimesheetDupKey(t) {
+  return `${t.consultant_id}|${t.billing_cycle_id}|${t.week_ending}`;
+}
+
+/** Warn when multiple DB rows share consultant + cycle + week (data integrity). */
+function updateTsDuplicateEntryWarning() {
+  const el = document.getElementById('ts-duplicate-entry-warning');
+  if (!el) return;
+  const consId = document.getElementById('ts-consultant')?.value;
+  const cycId = document.getElementById('ts-cycle')?.value;
+  const we = document.getElementById('ts-week-ending')?.value;
+  if (!consId || !cycId || !we) {
+    el.style.display = 'none';
+    return;
+  }
+  const matches = _timesheets.filter(t => t.consultant_id === consId && t.billing_cycle_id === cycId && t.week_ending === we);
+  if (matches.length > 1) {
+    el.style.display = 'block';
+    el.textContent = `Warning: ${matches.length} rows in the database share this consultant, billing cycle, and week (${fmtDate(we)}). Keep one and delete the others from All Timesheets.`;
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function dedupeTimesheetPayloadsForImport(payloads) {
+  const m = new Map();
+  let merged = 0;
+  for (const p of payloads) {
+    const k = `${p.consultant_id}|${p.billing_cycle_id}|${p.week_ending}`;
+    if (m.has(k)) merged++;
+    m.set(k, p);
+  }
+  return { rows: [...m.values()], merged };
 }
 
 async function loadAllTimesheets() {
@@ -3931,7 +4037,28 @@ async function loadAllTimesheets() {
   if (cliFilter)  rows = rows.filter(t => t.client_id    === cliFilter);
   if (cycFilter)  rows = rows.filter(t => t.billing_cycle_id === cycFilter);
   const tbody = document.getElementById('all-timesheets-body');
-  if (rows.length === 0) { tbody.innerHTML = `<tr><td colspan="15" style="color:var(--text-3);text-align:center;padding:30px;">No timesheet entries found.</td></tr>`; return; }
+  const listWarn = document.getElementById('ts-duplicate-list-warning');
+  if (rows.length === 0) {
+    if (listWarn) { listWarn.style.display = 'none'; listWarn.textContent = ''; }
+    tbody.innerHTML = `<tr><td colspan="15" style="color:var(--text-3);text-align:center;padding:30px;">No timesheet entries found.</td></tr>`;
+    return;
+  }
+  const dupCounts = new Map();
+  for (const t of rows) {
+    const k = tsTimesheetDupKey(t);
+    dupCounts.set(k, (dupCounts.get(k) || 0) + 1);
+  }
+  const dupGroups = [...dupCounts.entries()].filter(([, n]) => n > 1);
+  if (listWarn) {
+    if (dupGroups.length > 0) {
+      const extraRows = dupGroups.reduce((s, [, n]) => s + (n - 1), 0);
+      listWarn.style.display = 'block';
+      listWarn.innerHTML = `<strong>Duplicate timesheets:</strong> ${dupGroups.length} consultant/cycle/week combination(s) appear more than once below (${extraRows} extra row(s)). Only one row per week should exist—delete duplicates so totals stay correct.`;
+    } else {
+      listWarn.style.display = 'none';
+      listWarn.textContent = '';
+    }
+  }
   tbody.innerHTML = rows.map(t => {
     const cons  = _consultants.find(c => c.id === t.consultant_id);
     const cli   = _clients.find(c => c.id === t.client_id);
@@ -3978,6 +4105,7 @@ function jumpToEditTs(tsId) {
     document.getElementById('ts-week-ending').value = ts.week_ending;
     editTsEntry(tsId, ts.week_ending);
     onTsCycleChange();
+    updateTsDuplicateEntryWarning();
   }, 50);
 }
 
