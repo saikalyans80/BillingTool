@@ -1,0 +1,18 @@
+-- InvoiceFlow: bootstrap app roles after migration 20260506140000_roles_verification.sql
+--
+-- 1) Every auth user gets a profiles row (default ap_executive) from the migration backfill
+--    and from handle_new_user on new signups.
+--
+-- 2) First Global Admin cannot use set_profile_role until one admin exists. Promote yourself once
+--    from the Supabase SQL editor (service role / postgres), e.g. after you know your user id:
+--
+--    SELECT id, email FROM auth.users ORDER BY created_at;
+--    UPDATE public.profiles SET role = 'global_admin' WHERE id = '<paste-auth-users-id>';
+--
+-- 3) After at least one global_admin exists, signed-in admins can assign roles from SQL or via the
+--    client (sb.rpc) without service role:
+--
+--    SELECT public.set_profile_role('<target-user-uuid>'::uuid, 'ap_manager');
+--    -- allowed new_role values: global_admin | ap_executive | ap_manager
+--
+-- 4) Re-run on each environment after db push.

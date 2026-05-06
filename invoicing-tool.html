@@ -216,15 +216,15 @@
         Pending Invoices
         <span id="pending-badge" style="margin-left:auto; background:#dc2626; color:white; border-radius:999px; font-size:10px; padding:1px 7px; display:none;">0</span>
       </div>
-      <div class="nav-link" onclick="showSection('invoiced')">
-        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        Invoiced
-        <span id="invoiced-badge" style="margin-left:auto; background:#0e7c3a; color:white; border-radius:999px; font-size:10px; padding:1px 7px; display:none;">0</span>
+      <div class="nav-link" onclick="showSection('verifications')">
+        <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+        Verifications
+        <span id="verif-badge" style="margin-left:auto; background:#b45309; color:white; border-radius:999px; font-size:10px; padding:1px 7px; display:none;">0</span>
       </div>
-      <div class="nav-link" onclick="showSection('verified')">
+      <div class="nav-link" onclick="showSection('double-verified')">
         <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-        Double verified
-        <span id="verified-badge" style="margin-left:auto; background:#5b21b6; color:white; border-radius:999px; font-size:10px; padding:1px 7px; display:none;">0</span>
+        Double Verified
+        <span id="dv-badge" style="margin-left:auto; background:#0e7c3a; color:white; border-radius:999px; font-size:10px; padding:1px 7px; display:none;">0</span>
       </div>
       <div class="nav-link" onclick="showSection('upcoming')">
         <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
@@ -262,6 +262,7 @@
     </div>
     <div style="padding:16px 20px; border-top:1px solid #1e293b;">
       <div id="user-email-display" style="font-size:11px; color:#475569; margin-bottom:8px;"></div>
+      <div id="user-role-display" style="font-size:10px; color:#64748b; margin-bottom:8px; line-height:1.35;"></div>
       <button class="btn btn-secondary" style="width:100%; justify-content:center; background:#0f172a; border-color:#334155; color:#94a3b8; font-size:12px;" onclick="doLogout()">Sign Out</button>
     </div>
   </nav>
@@ -277,7 +278,7 @@
 
       <!-- DASHBOARD -->
       <div id="section-dashboard" class="section active">
-        <div style="display:grid; grid-template-columns:repeat(6,1fr); gap:16px; margin-bottom:24px;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:16px; margin-bottom:24px;">
           <div class="stat-card">
             <div class="stat-value" id="stat-consultants">—</div>
             <div class="stat-label">Total Consultants</div>
@@ -301,6 +302,14 @@
           <div class="stat-card" style="border-left:3px solid #f59e0b;">
             <div class="stat-value" style="color:#b45309;" id="stat-missing-ts">—</div>
             <div class="stat-label">Missing Timesheets</div>
+          </div>
+          <div class="stat-card" style="border-left:3px solid #b45309;">
+            <div class="stat-value" style="color:#b45309;" id="stat-awaiting-verif">—</div>
+            <div class="stat-label">Awaiting verification</div>
+          </div>
+          <div class="stat-card" style="border-left:3px solid #0e7c3a;">
+            <div class="stat-value" style="color:#0e7c3a;" id="stat-double-verified">—</div>
+            <div class="stat-label">Double verified</div>
           </div>
         </div>
         <div class="card">
@@ -335,59 +344,48 @@
         </div>
       </div>
 
-      <!-- INVOICED -->
-      <div id="section-invoiced" class="section">
+      <!-- VERIFICATIONS (invoiced, awaiting manager sign-off) -->
+      <div id="section-verifications" class="section">
         <div class="card" style="margin-bottom:16px;">
           <div class="card-body">
             <div class="filter-bar">
-              <div class="form-group"><label class="form-label">Client</label><select id="if-client" class="form-control" onchange="loadInvoiced()"><option value="">All Clients</option></select></div>
-              <div class="form-group"><label class="form-label">Consultant</label><select id="if-consultant" class="form-control" onchange="loadInvoiced()"><option value="">All Consultants</option></select></div>
-              <div class="form-group"><label class="form-label">From Date</label><input type="date" id="if-from" class="form-control" onchange="loadInvoiced()"></div>
-              <div class="form-group"><label class="form-label">To Date</label><input type="date" id="if-to" class="form-control" onchange="loadInvoiced()"></div>
-              <div class="form-group"><label class="form-label">&nbsp;</label><button class="btn btn-secondary" onclick="clearInvoicedFilters()">Clear</button></div>
+              <div class="form-group"><label class="form-label">Client</label><select id="vf-client" class="form-control" onchange="loadVerifications()"><option value="">All Clients</option></select></div>
+              <div class="form-group"><label class="form-label">Consultant</label><select id="vf-consultant" class="form-control" onchange="loadVerifications()"><option value="">All Consultants</option></select></div>
+              <div class="form-group"><label class="form-label">From Date</label><input type="date" id="vf-from" class="form-control" onchange="loadVerifications()"></div>
+              <div class="form-group"><label class="form-label">To Date</label><input type="date" id="vf-to" class="form-control" onchange="loadVerifications()"></div>
+              <div class="form-group"><label class="form-label">&nbsp;</label><button class="btn btn-secondary" onclick="clearVerificationsFilters()">Clear</button></div>
             </div>
           </div>
         </div>
         <div class="card">
-          <div class="card-header" style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
-            <div>
-              <span style="font-weight:600;">Invoiced</span>
-              <p style="font-size:11px;color:var(--text-3);font-weight:400;margin:6px 0 0;line-height:1.45;max-width:520px;">Rows here are invoiced but not yet second-checked. Use <strong>Verify</strong> to move a row to <strong>Double verified</strong>.</p>
-            </div>
-            <button class="btn btn-secondary btn-sm" onclick="exportInvoicedCSV()" style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-              Export CSV
-            </button>
-          </div>
-          <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Consultant</th><th>Client</th><th>Cycle</th><th>Period</th><th>Billing Rate</th><th>Hours</th><th>Total Amount</th><th>Invoice #</th><th>Invoice Date</th><th>Actions</th></tr></thead><tbody id="invoiced-body"><tr><td colspan="10" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
+          <div class="card-header"><span style="font-weight:600;">Verifications</span></div>
+          <p style="font-size:11px;color:var(--text-3);margin:0 20px 12px;line-height:1.5;">Invoices marked by AP Executive await cross-check here. AP Manager or Global Admin can verify to move them to <strong>Double Verified</strong>.</p>
+          <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Consultant</th><th>Client</th><th>Cycle</th><th>Period</th><th>Billing Rate</th><th>Hours</th><th>Total Amount</th><th>Invoice #</th><th>Invoice Date</th><th>Actions</th></tr></thead><tbody id="verifications-body"><tr><td colspan="10" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
         </div>
       </div>
 
       <!-- DOUBLE VERIFIED -->
-      <div id="section-verified" class="section">
+      <div id="section-double-verified" class="section">
         <div class="card" style="margin-bottom:16px;">
           <div class="card-body">
             <div class="filter-bar">
-              <div class="form-group"><label class="form-label">Client</label><select id="vf-client" class="form-control" onchange="loadVerified()"><option value="">All Clients</option></select></div>
-              <div class="form-group"><label class="form-label">Consultant</label><select id="vf-consultant" class="form-control" onchange="loadVerified()"><option value="">All Consultants</option></select></div>
-              <div class="form-group"><label class="form-label">From Date</label><input type="date" id="vf-from" class="form-control" onchange="loadVerified()"></div>
-              <div class="form-group"><label class="form-label">To Date</label><input type="date" id="vf-to" class="form-control" onchange="loadVerified()"></div>
-              <div class="form-group"><label class="form-label">&nbsp;</label><button class="btn btn-secondary" onclick="clearVerifiedFilters()">Clear</button></div>
+              <div class="form-group"><label class="form-label">Client</label><select id="if-client" class="form-control" onchange="loadDoubleVerified()"><option value="">All Clients</option></select></div>
+              <div class="form-group"><label class="form-label">Consultant</label><select id="if-consultant" class="form-control" onchange="loadDoubleVerified()"><option value="">All Consultants</option></select></div>
+              <div class="form-group"><label class="form-label">From Date</label><input type="date" id="if-from" class="form-control" onchange="loadDoubleVerified()"></div>
+              <div class="form-group"><label class="form-label">To Date</label><input type="date" id="if-to" class="form-control" onchange="loadDoubleVerified()"></div>
+              <div class="form-group"><label class="form-label">&nbsp;</label><button class="btn btn-secondary" onclick="clearDoubleVerifiedFilters()">Clear</button></div>
             </div>
           </div>
         </div>
         <div class="card">
-          <div class="card-header" style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
-            <div>
-              <span style="font-weight:600;">Double verified</span>
-              <p style="font-size:11px;color:var(--text-3);font-weight:400;margin:6px 0 0;line-height:1.45;max-width:520px;">Finance / second review complete. Use <strong>Back to Invoiced</strong> only if you need to undo this step.</p>
-            </div>
-            <button class="btn btn-secondary btn-sm" onclick="exportVerifiedCSV()" style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="font-weight:600;">Double Verified</span>
+            <button class="btn btn-secondary btn-sm" onclick="exportDoubleVerifiedCSV()" style="display:flex;align-items:center;gap:6px;">
               <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
               Export CSV
             </button>
           </div>
-          <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Consultant</th><th>Client</th><th>Cycle</th><th>Period</th><th>Billing Rate</th><th>Hours</th><th>Total Amount</th><th>Invoice #</th><th>Invoice Date</th><th>Verified</th><th>Actions</th></tr></thead><tbody id="verified-body"><tr><td colspan="11" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
+          <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Consultant</th><th>Client</th><th>Cycle</th><th>Period</th><th>Billing Rate</th><th>Hours</th><th>Total Amount</th><th>Invoice #</th><th>Invoice Date</th><th>Verified</th><th>Actions</th></tr></thead><tbody id="double-verified-body"><tr><td colspan="11" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
         </div>
       </div>
 
@@ -420,7 +418,7 @@
         <div class="card">
           <div class="card-header">
             <span style="font-weight:600;">Consultants</span>
-            <div style="display:flex;gap:8px;">
+            <div style="display:flex;gap:8px;" data-require-admin="1">
               <button class="btn btn-secondary btn-sm" onclick="openBulkConsultantModal()">+ Bulk Add</button>
               <button class="btn btn-danger btn-sm" onclick="openBulkDeleteConsultantModal()">Bulk delete</button>
               <button class="btn btn-primary btn-sm" onclick="openConsultantModal()">+ Add Consultant</button>
@@ -435,7 +433,7 @@
         <div class="card">
           <div class="card-header">
             <span style="font-weight:600;">Clients</span>
-            <button class="btn btn-primary btn-sm" onclick="openClientModal()">+ Add Client</button>
+            <button class="btn btn-primary btn-sm" onclick="openClientModal()" data-require-admin="1">+ Add Client</button>
           </div>
           <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Client Name</th><th>Contact</th><th>Email</th><th>Billing Cycles</th><th>Actions</th></tr></thead><tbody id="clients-body"><tr><td colspan="5" style="color:var(--text-3); text-align:center; padding:30px;">Loading…</td></tr></tbody></table></div>
         </div>
@@ -454,7 +452,7 @@
         <div class="card">
           <div class="card-header">
             <span style="font-weight:600;">Billing Cycles</span>
-            <div style="display:flex;gap:8px;">
+            <div style="display:flex;gap:8px;" data-require-admin="1">
               <button class="btn btn-danger btn-sm" onclick="unassignEndedCycles()">Unassign Ended Cycles</button>
               <button class="btn btn-secondary btn-sm" onclick="openBulkCycleModal()">+ Bulk Add</button>
               <button class="btn btn-primary btn-sm" onclick="openCycleModal()">+ Add Cycle(s)</button>
@@ -494,7 +492,7 @@
               <span style="font-weight:600;">Consultant Assignments</span>
               <span id="asgn-cycle-summary" style="font-size:11px; color:var(--text-3); margin-left:10px;"></span>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="openNewAsgnModal()">&#43; New Assignment</button>
+            <button class="btn btn-primary btn-sm" onclick="openNewAsgnModal()" data-require-admin="1">&#43; New Assignment</button>
           </div>
           <div class="tbl-wrap">
             <table class="tbl">
@@ -1044,9 +1042,27 @@
         </div>
       </div>
       <div class="form-group"><label class="form-label">Invoice Date</label><input type="date" id="inv-date" class="form-control"></div>
-      <p style="font-size:11px;color:var(--text-3);margin-top:12px;line-height:1.45;">After saving, open <strong>Invoiced</strong> and click <strong>Verify</strong> on a row to move it to <strong>Double verified</strong> once a second review is done.</p>
     </div>
-    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('invoice-modal')">Cancel</button><button class="btn btn-success" onclick="confirmMarkInvoiced()">Confirm - Mark as Invoiced</button></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('invoice-modal')">Cancel</button><button class="btn btn-success" onclick="confirmMarkInvoiced()">Submit for verification</button></div>
+  </div>
+</div>
+
+<!-- Verify invoice (manager / admin) -->
+<div class="modal-overlay" id="verify-invoice-modal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header"><h3 style="font-size:15px; font-weight:600; margin:0;">Verify invoice</h3><button class="modal-close" onclick="closeModal('verify-invoice-modal')">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="verify-inv-id">
+      <p style="font-size:12px;color:var(--text-2);margin-bottom:12px;line-height:1.5;" id="verify-inv-summary"></p>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:var(--text-2);">
+        <input type="checkbox" id="verify-inv-confirm" style="margin-top:3px;">
+        I have cross-checked this invoice (amounts, hours, invoice number, and dates) and confirm it is correct.
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('verify-invoice-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmVerifyInvoice()">Confirm verification</button>
+    </div>
   </div>
 </div>
 
@@ -1241,6 +1257,68 @@ function fmtDate(iso) {
 }
 
 // ============================================================
+//  ROLES (public.profiles)
+// ============================================================
+let _profileRole = null;
+
+async function fetchAppProfile() {
+  _profileRole = null;
+  if (!sb) return;
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session?.user?.id) return;
+  const { data, error } = await sb.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+  if (error) {
+    console.warn('[InvoiceFlow] profile fetch', error);
+    return;
+  }
+  if (data?.role) _profileRole = data.role;
+}
+
+function isGlobalAdmin() {
+  return _profileRole === 'global_admin';
+}
+function isApExecutive() {
+  return _profileRole === 'ap_executive';
+}
+function isApManager() {
+  return _profileRole === 'ap_manager';
+}
+function canMarkInvoiced() {
+  return isGlobalAdmin() || isApExecutive();
+}
+function canVerifyInvoice() {
+  return isGlobalAdmin() || isApManager();
+}
+function canUndoAwaitingVerification() {
+  return isGlobalAdmin() || isApExecutive();
+}
+function canEditVerifiedInvoiceDetails() {
+  return isGlobalAdmin();
+}
+/** Master data mutations (consultants, clients, cycles, assignments) are admin-only in the UI. */
+function requireGlobalAdminFor(action) {
+  if (isGlobalAdmin()) return true;
+  toast(`Only a Global Admin can ${action}.`, 'error');
+  return false;
+}
+
+function applyRoleUI() {
+  const master = isGlobalAdmin();
+  document.querySelectorAll('[data-require-admin="1"]').forEach(el => {
+    el.classList.toggle('role-hidden', !master);
+  });
+  const rd = document.getElementById('user-role-display');
+  if (rd) {
+    const m = {
+      global_admin: 'Role: Global Admin',
+      ap_executive: 'Accounts Payable Executive',
+      ap_manager: 'Accounts Payable Manager',
+    };
+    rd.textContent = _profileRole ? (m[_profileRole] || _profileRole) : 'No role — run DB migration / set profiles row';
+  }
+}
+
+// ============================================================
 //  AUTH
 // ============================================================
 async function doLogin() {
@@ -1275,10 +1353,14 @@ async function onLoggedIn(email) {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   document.getElementById('user-email-display').textContent = email;
+  await fetchAppProfile();
+  if (!_profileRole) {
+    toast('No profile for this user. Apply Supabase migration 20260506140000_roles_verification.sql (profiles table). Existing users are backfilled as AP Executive — set a Global Admin in SQL if needed.', 'error');
+  }
+  applyRoleUI();
   await loadAllData();
   await loadSettings();
   await checkPendingOnLogin();
-  await loadVerified();
 }
 
 async function doLogout() {
@@ -1293,15 +1375,27 @@ function showSection(id) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
   document.getElementById(`section-${id}`).classList.add('active');
-  const titles = { dashboard:'Dashboard', pending:'Pending Invoices', invoiced:'Invoiced', verified:'Double verified', upcoming:'Upcoming Cycles', consultants:'Consultants', clients:'Clients', 'billing-cycles':'Billing Cycles', assignments:'Assignments', timesheets:'Timesheets', settings:'Settings' };
+  const titles = {
+    dashboard: 'Dashboard',
+    pending: 'Pending Invoices',
+    verifications: 'Verifications',
+    'double-verified': 'Double Verified',
+    upcoming: 'Upcoming Cycles',
+    consultants: 'Consultants',
+    clients: 'Clients',
+    'billing-cycles': 'Billing Cycles',
+    assignments: 'Assignments',
+    timesheets: 'Timesheets',
+    settings: 'Settings',
+  };
   document.getElementById('page-title').textContent = titles[id] || id;
   document.querySelectorAll('.nav-link').forEach(n => {
     if (n.getAttribute('onclick') === `showSection('${id}')`) n.classList.add('active');
   });
   // lazy-load sections
   if (id === 'pending') loadPending();
-  if (id === 'invoiced') loadInvoiced();
-  if (id === 'verified') loadVerified();
+  if (id === 'verifications') loadVerifications();
+  if (id === 'double-verified') loadDoubleVerified();
   if (id === 'upcoming') loadUpcoming();
   if (id === 'consultants') loadConsultants();
   if (id === 'clients') loadClients();
@@ -1325,7 +1419,7 @@ async function loadAllData() {
       await fetchPendingInvoices();
       populateFilterDropdowns();
       populateTsDropdowns();
-      loadDashboard();
+      await loadDashboard();
     } finally {
       _loadAllDataPromise = null;
     }
@@ -1379,7 +1473,7 @@ async function autoGeneratePending() {
 
 async function autoGeneratePendingClient() {
   const today = new Date().toISOString().split('T')[0];
-  const { ok, data: existing } = await unwrapSupabase('List existing invoices', sb.from('invoices').select('consultant_id,billing_cycle_id').in('status',['pending','invoiced','verified']));
+  const { ok, data: existing } = await unwrapSupabase('List existing invoices', sb.from('invoices').select('consultant_id,billing_cycle_id').in('status', ['pending', 'invoiced_awaiting_verification', 'double_verified']));
   if (!ok) return;
   const existingSet = new Set((existing||[]).map(e => `${e.consultant_id}__${e.billing_cycle_id}`));
 
@@ -1421,13 +1515,24 @@ async function autoGeneratePendingClient() {
 // ============================================================
 //  DASHBOARD
 // ============================================================
-function loadDashboard() {
+async function loadDashboard() {
   document.getElementById('stat-consultants').textContent = _consultants.length;
   document.getElementById('stat-clients').textContent = _clients.length;
   document.getElementById('stat-cycles').textContent = _cycles.length;
   document.getElementById('stat-pending').textContent = _pendingInvoices.length;
   const _upcomingCount = _assignments.filter(a => { const c=_cycles.find(cy=>cy.id===a.billing_cycle_id); return c && c.end_date >= new Date().toISOString().split('T')[0]; }).length;
   const _upcomingEl = document.getElementById('stat-upcoming'); if (_upcomingEl) _upcomingEl.textContent = _upcomingCount;
+
+  const stAv = document.getElementById('stat-awaiting-verif');
+  const stDv = document.getElementById('stat-double-verified');
+  if (sb && stAv && stDv) {
+    const [a, d] = await Promise.all([
+      sb.from('invoices').select('id', { count: 'exact', head: true }).eq('status', 'invoiced_awaiting_verification'),
+      sb.from('invoices').select('id', { count: 'exact', head: true }).eq('status', 'double_verified'),
+    ]);
+    if (!a.error) stAv.textContent = a.count != null ? a.count : '—';
+    if (!d.error) stDv.textContent = d.count != null ? d.count : '—';
+  }
 
   const badge = document.getElementById('pending-badge');
   if (_pendingInvoices.length > 0) { badge.textContent = _pendingInvoices.length; badge.style.display = 'inline'; }
@@ -1437,11 +1542,23 @@ function loadDashboard() {
   const ubadge = document.getElementById('upcoming-badge');
   if (ubadge) { if (upcomingCount > 0) { ubadge.textContent = upcomingCount; ubadge.style.display = 'inline'; } else { ubadge.style.display = 'none'; } }
 
+  const vb = document.getElementById('verif-badge');
+  const dvB = document.getElementById('dv-badge');
+  if (sb && vb && dvB) {
+    const [ac, dc] = await Promise.all([
+      sb.from('invoices').select('id', { count: 'exact', head: true }).eq('status', 'invoiced_awaiting_verification'),
+      sb.from('invoices').select('id', { count: 'exact', head: true }).eq('status', 'double_verified'),
+    ]);
+    if (!ac.error && ac.count > 0) { vb.textContent = ac.count; vb.style.display = 'inline'; } else if (vb) vb.style.display = 'none';
+    if (!dc.error && dc.count > 0) { dvB.textContent = dc.count; dvB.style.display = 'inline'; } else if (dvB) dvB.style.display = 'none';
+  }
+
   // Missing timesheet badge update
   updateMissingTsBadge();
 
   const tbody = document.getElementById('dash-pending-body');
   if (_pendingInvoices.length === 0) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--text-3); text-align:center; padding:30px;">No pending invoices</td></tr>`; return; }
+  const markBtn = (id) => canMarkInvoiced() ? `<button class="btn btn-success btn-xs" onclick="openInvoiceModal('${id}')">Mark Invoiced</button>` : '<span style="font-size:11px;color:var(--text-3);">—</span>';
   tbody.innerHTML = _pendingInvoices.slice(0,8).map(inv => {
     const cons = _consultants.find(c => c.id === inv.consultant_id);
     const cli = _clients.find(c => c.id === inv.client_id);
@@ -1452,7 +1569,7 @@ function loadDashboard() {
       <td>${cyc?.label ? escapeHtml(cyc.label) : escapeHtml(cycleLabel(cyc))}</td>
       <td class="mono" style="font-size:12px;">${fmtDate(cyc?.start_date)} → ${fmtDate(cyc?.end_date)}</td>
       <td class="mono">$${inv.billing_rate || '—'}</td>
-      <td><button class="btn btn-success btn-xs" onclick="openInvoiceModal('${inv.id}')">Mark Invoiced</button></td>
+      <td>${markBtn(inv.id)}</td>
     </tr>`;
   }).join('');
 }
@@ -1517,8 +1634,8 @@ async function loadPending() {
       <td class="mono" id="total-${inv.id}">${total}</td>
       <td>${covBadge}${missingHint}</td>
       <td style="display:flex; gap:6px;">
-        <button class="btn btn-success btn-xs" onclick="openInvoiceModal('${inv.id}')">Mark Invoiced</button>
-        <button class="btn btn-danger btn-xs" onclick="removePendingInvoice('${inv.id}','${inv.consultant_id}','${inv.billing_cycle_id}')">Remove</button>
+        ${canMarkInvoiced() ? `<button class="btn btn-success btn-xs" onclick="openInvoiceModal('${inv.id}')">Mark Invoiced</button>` : ''}
+        ${isGlobalAdmin() ? `<button class="btn btn-danger btn-xs" onclick="removePendingInvoice('${inv.id}','${inv.consultant_id}','${inv.billing_cycle_id}')">Remove</button>` : ''}
       </td>
     </tr>`;
   }).join('');
@@ -1561,112 +1678,10 @@ async function saveInvoiceHours(invId, hoursVal, inputEl) {
 }
 
 // ============================================================
-//  INVOICED TAB
+//  VERIFICATIONS (awaiting manager / admin)
 // ============================================================
-async function loadInvoiced() {
-  const { ok, data } = await unwrapSupabase('Load invoiced records', sb.from('invoices').select('*').eq('status', 'invoiced').order('invoice_date', { ascending: false }));
-  if (!ok) return;
-  let rows = data || [];
-
-  const clientFilter = document.getElementById('if-client').value;
-  const consultantFilter = document.getElementById('if-consultant').value;
-  const fromFilter = document.getElementById('if-from').value;
-  const toFilter = document.getElementById('if-to').value;
-
-  if (clientFilter) rows = rows.filter(r => r.client_id === clientFilter);
-  if (consultantFilter) rows = rows.filter(r => r.consultant_id === consultantFilter);
-  if (fromFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.start_date >= fromFilter; });
-  if (toFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.end_date <= toFilter; });
-
-  // Update invoiced badge
-  const { ok: okBadge, data: allInvoiced } = await unwrapSupabase('Load invoiced count', sb.from('invoices').select('id').eq('status', 'invoiced'));
-  const ibadge = document.getElementById('invoiced-badge');
-  if (ibadge && okBadge) {
-    const cnt = (allInvoiced||[]).length;
-    if (cnt > 0) { ibadge.textContent = cnt; ibadge.style.display = 'inline'; } else { ibadge.style.display = 'none'; }
-  }
-
-  const tbody = document.getElementById('invoiced-body');
-  if (rows.length === 0) { tbody.innerHTML = `<tr><td colspan="10" style="color:var(--text-3); text-align:center; padding:30px;">No invoiced records match filters</td></tr>`; return; }
-  tbody.innerHTML = rows.map(inv => {
-    const cons = _consultants.find(c => c.id === inv.consultant_id);
-    const cli = _clients.find(c => c.id === inv.client_id);
-    const cyc = _cycles.find(c => c.id === inv.billing_cycle_id);
-    const rate = parseFloat(inv.billing_rate) || 0;
-    const hours = inv.hours != null ? inv.hours : '—';
-    const total = (rate && inv.hours != null) ? '$' + (rate * inv.hours).toFixed(2) : '—';
-    return `<tr>
-      <td><strong>${escapeHtml(cons?.name || '—')}</strong></td>
-      <td>${escapeHtml(cli?.name || '—')}</td>
-      <td>${cyc?.label ? escapeHtml(cyc.label) : escapeHtml(cycleLabel(cyc))}</td>
-      <td class="mono" style="font-size:12px;">${fmtDate(cyc?.start_date)} → ${fmtDate(cyc?.end_date)}</td>
-      <td class="mono">$${inv.billing_rate||'—'}/hr</td>
-      <td class="mono">${hours}</td>
-      <td class="mono">${total}</td>
-      <td class="mono" style="font-size:12px;">${escapeHtml(inv.invoice_number || '—')}</td>
-      <td class="mono" style="font-size:12px;">${fmtDate(inv.invoice_date)}</td>
-      <td style="display:flex; gap:5px; align-items:center; flex-wrap:wrap;">
-        <button class="btn btn-success btn-xs" onclick="markInvoiceVerified('${inv.id}')">Verify</button>
-        <button class="btn btn-secondary btn-xs" title="Edit" onclick="openEditInvoicedModal('${inv.id}')" style="padding:4px 7px;">
-          <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-        </button>
-        <button class="btn btn-secondary btn-xs" onclick="undoInvoice('${inv.id}')">↩ Undo</button>
-      </td>
-    </tr>`;
-  }).join('');
-}
-
-function clearInvoicedFilters() {
-  document.getElementById('if-client').value = '';
-  document.getElementById('if-consultant').value = '';
-  document.getElementById('if-from').value = '';
-  document.getElementById('if-to').value = '';
-  loadInvoiced();
-}
-
-async function undoInvoice(invId) {
-  if (!confirm('Undo this invoice? It will be moved back to Pending status.')) return;
-  const { ok } = await unwrapSupabase('Undo invoice', sb.from('invoices').update({ status: 'pending', invoice_number: null, invoice_date: null }).eq('id', invId));
-  if (!ok) return;
-  toast('Invoice moved back to Pending.');
-  await fetchPendingInvoices();
-  loadDashboard();
-  loadInvoiced();
-  loadVerified();
-}
-
-function fmtVerifiedAt(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '—';
-  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-async function markInvoiceVerified(invId) {
-  if (!confirm('Move this invoice to Double verified? It leaves the Invoiced list after a second check is recorded.')) return;
-  const { ok } = await unwrapSupabase('Verify invoice', sb.from('invoices').update({ status: 'verified', verified_at: new Date().toISOString() }).eq('id', invId));
-  if (!ok) return;
-  toast('Moved to Double verified.');
-  loadInvoiced();
-  loadVerified();
-  loadDashboard();
-}
-
-async function undoVerifiedToInvoiced(invId) {
-  if (!confirm('Move this invoice back to Invoiced? It will no longer be marked double verified.')) return;
-  const { ok } = await unwrapSupabase('Unverify invoice', sb.from('invoices').update({ status: 'invoiced', verified_at: null }).eq('id', invId));
-  if (!ok) return;
-  toast('Moved back to Invoiced.');
-  loadInvoiced();
-  loadVerified();
-  loadDashboard();
-}
-
-// ============================================================
-//  DOUBLE VERIFIED TAB
-// ============================================================
-async function loadVerified() {
-  const { ok, data } = await unwrapSupabase('Load verified invoices', sb.from('invoices').select('*').eq('status', 'verified').order('verified_at', { ascending: false }));
+async function loadVerifications() {
+  const { ok, data } = await unwrapSupabase('Load verification queue', sb.from('invoices').select('*').eq('status', 'invoiced_awaiting_verification').order('invoice_date', { ascending: false }));
   if (!ok) return;
   let rows = data || [];
 
@@ -1680,22 +1695,17 @@ async function loadVerified() {
   if (fromFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.start_date >= fromFilter; });
   if (toFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.end_date <= toFilter; });
 
-  const { ok: okBadge, data: allVerified } = await unwrapSupabase('Load verified count', sb.from('invoices').select('id').eq('status', 'verified'));
-  const vbadge = document.getElementById('verified-badge');
-  if (vbadge && okBadge) {
-    const cnt = (allVerified || []).length;
-    if (cnt > 0) {
-      vbadge.textContent = cnt;
-      vbadge.style.display = 'inline';
-    } else {
-      vbadge.style.display = 'none';
-    }
+  const { ok: okBadge, data: allAwait } = await unwrapSupabase('Count verifications', sb.from('invoices').select('id').eq('status', 'invoiced_awaiting_verification'));
+  const vb = document.getElementById('verif-badge');
+  if (vb && okBadge) {
+    const cnt = (allAwait || []).length;
+    if (cnt > 0) { vb.textContent = cnt; vb.style.display = 'inline'; } else { vb.style.display = 'none'; }
   }
 
-  const tbody = document.getElementById('verified-body');
+  const tbody = document.getElementById('verifications-body');
   if (!tbody) return;
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="11" style="color:var(--text-3); text-align:center; padding:30px;">No double-verified records match filters</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="color:var(--text-3); text-align:center; padding:30px;">No invoices awaiting verification</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(inv => {
@@ -1705,44 +1715,180 @@ async function loadVerified() {
     const rate = parseFloat(inv.billing_rate) || 0;
     const hours = inv.hours != null ? inv.hours : '—';
     const total = (rate && inv.hours != null) ? '$' + (rate * inv.hours).toFixed(2) : '—';
+    const verifyBtn = canVerifyInvoice() ? `<button class="btn btn-primary btn-xs" onclick="openVerifyInvoiceModal('${inv.id}')">Verify</button>` : '';
+    const undoBtn = canUndoAwaitingVerification() ? `<button class="btn btn-secondary btn-xs" onclick="undoInvoice('${inv.id}')">↩ Undo</button>` : '';
+    const editBtn = canEditVerifiedInvoiceDetails() ? `<button class="btn btn-secondary btn-xs" title="Edit" onclick="openEditInvoicedModal('${inv.id}')" style="padding:4px 7px;"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>` : '';
     return `<tr>
       <td><strong>${escapeHtml(cons?.name || '—')}</strong></td>
       <td>${escapeHtml(cli?.name || '—')}</td>
       <td>${cyc?.label ? escapeHtml(cyc.label) : escapeHtml(cycleLabel(cyc))}</td>
       <td class="mono" style="font-size:12px;">${fmtDate(cyc?.start_date)} → ${fmtDate(cyc?.end_date)}</td>
-      <td class="mono">$${inv.billing_rate || '—'}/hr</td>
+      <td class="mono">$${inv.billing_rate||'—'}/hr</td>
       <td class="mono">${hours}</td>
       <td class="mono">${total}</td>
       <td class="mono" style="font-size:12px;">${escapeHtml(inv.invoice_number || '—')}</td>
       <td class="mono" style="font-size:12px;">${fmtDate(inv.invoice_date)}</td>
-      <td class="mono" style="font-size:11px;">${escapeHtml(fmtVerifiedAt(inv.verified_at))}</td>
-      <td style="display:flex; gap:5px; align-items:center; flex-wrap:wrap;">
-        <button class="btn btn-secondary btn-xs" title="Edit" onclick="openEditInvoicedModal('${inv.id}')" style="padding:4px 7px;">
-          <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-        </button>
-        <button class="btn btn-secondary btn-xs" onclick="undoVerifiedToInvoiced('${inv.id}')">↩ Back to Invoiced</button>
-      </td>
+      <td style="display:flex; gap:5px; align-items:center; flex-wrap:wrap;">${verifyBtn}${editBtn}${undoBtn}</td>
     </tr>`;
   }).join('');
 }
 
-function clearVerifiedFilters() {
-  document.getElementById('vf-client').value = '';
-  document.getElementById('vf-consultant').value = '';
-  document.getElementById('vf-from').value = '';
-  document.getElementById('vf-to').value = '';
-  loadVerified();
+function clearVerificationsFilters() {
+  const c = document.getElementById('vf-client');
+  const co = document.getElementById('vf-consultant');
+  const f = document.getElementById('vf-from');
+  const t = document.getElementById('vf-to');
+  if (c) c.value = '';
+  if (co) co.value = '';
+  if (f) f.value = '';
+  if (t) t.value = '';
+  loadVerifications();
+}
+
+// ============================================================
+//  DOUBLE VERIFIED TAB
+// ============================================================
+async function loadDoubleVerified() {
+  const { ok, data } = await unwrapSupabase('Load double-verified records', sb.from('invoices').select('*').eq('status', 'double_verified').order('invoice_date', { ascending: false }));
+  if (!ok) return;
+  let rows = data || [];
+
+  const clientFilter = document.getElementById('if-client').value;
+  const consultantFilter = document.getElementById('if-consultant').value;
+  const fromFilter = document.getElementById('if-from').value;
+  const toFilter = document.getElementById('if-to').value;
+
+  if (clientFilter) rows = rows.filter(r => r.client_id === clientFilter);
+  if (consultantFilter) rows = rows.filter(r => r.consultant_id === consultantFilter);
+  if (fromFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.start_date >= fromFilter; });
+  if (toFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.end_date <= toFilter; });
+
+  const { ok: okBadge, data: allDv } = await unwrapSupabase('Load DV count', sb.from('invoices').select('id').eq('status', 'double_verified'));
+  const dvBadge = document.getElementById('dv-badge');
+  if (dvBadge && okBadge) {
+    const cnt = (allDv || []).length;
+    if (cnt > 0) { dvBadge.textContent = cnt; dvBadge.style.display = 'inline'; } else { dvBadge.style.display = 'none'; }
+  }
+
+  const tbody = document.getElementById('double-verified-body');
+  if (!tbody) return;
+  if (rows.length === 0) { tbody.innerHTML = `<tr><td colspan="11" style="color:var(--text-3); text-align:center; padding:30px;">No double-verified records match filters</td></tr>`; return; }
+  tbody.innerHTML = rows.map(inv => {
+    const cons = _consultants.find(c => c.id === inv.consultant_id);
+    const cli = _clients.find(c => c.id === inv.client_id);
+    const cyc = _cycles.find(c => c.id === inv.billing_cycle_id);
+    const rate = parseFloat(inv.billing_rate) || 0;
+    const hours = inv.hours != null ? inv.hours : '—';
+    const total = (rate && inv.hours != null) ? '$' + (rate * inv.hours).toFixed(2) : '—';
+    const verifiedCell = inv.verified_at ? fmtDate(String(inv.verified_at).slice(0, 10)) : '—';
+    const editBtn = canEditVerifiedInvoiceDetails() ? `<button class="btn btn-secondary btn-xs" title="Edit" onclick="openEditInvoicedModal('${inv.id}')" style="padding:4px 7px;"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>` : '';
+    const undoBtn = isGlobalAdmin() ? `<button class="btn btn-secondary btn-xs" onclick="undoInvoice('${inv.id}')">↩ Undo</button>` : '';
+    return `<tr>
+      <td><strong>${escapeHtml(cons?.name || '—')}</strong></td>
+      <td>${escapeHtml(cli?.name || '—')}</td>
+      <td>${cyc?.label ? escapeHtml(cyc.label) : escapeHtml(cycleLabel(cyc))}</td>
+      <td class="mono" style="font-size:12px;">${fmtDate(cyc?.start_date)} → ${fmtDate(cyc?.end_date)}</td>
+      <td class="mono">$${inv.billing_rate||'—'}/hr</td>
+      <td class="mono">${hours}</td>
+      <td class="mono">${total}</td>
+      <td class="mono" style="font-size:12px;">${escapeHtml(inv.invoice_number || '—')}</td>
+      <td class="mono" style="font-size:12px;">${fmtDate(inv.invoice_date)}</td>
+      <td class="mono" style="font-size:12px;">${verifiedCell}</td>
+      <td style="display:flex; gap:5px; align-items:center;">${editBtn}${undoBtn}</td>
+    </tr>`;
+  }).join('');
+}
+
+function clearDoubleVerifiedFilters() {
+  document.getElementById('if-client').value = '';
+  document.getElementById('if-consultant').value = '';
+  document.getElementById('if-from').value = '';
+  document.getElementById('if-to').value = '';
+  loadDoubleVerified();
+}
+
+async function undoInvoice(invId) {
+  const { ok: okLoad, data: inv } = await unwrapSupabaseQuiet(sb.from('invoices').select('status').eq('id', invId).single());
+  if (!okLoad || !inv) { toast('Could not load invoice', 'error'); return; }
+  if (inv.status === 'double_verified' && !isGlobalAdmin()) {
+    toast('Only Global Admin can undo a double-verified invoice.', 'error');
+    return;
+  }
+  if (inv.status === 'invoiced_awaiting_verification' && !canUndoAwaitingVerification()) {
+    toast('You cannot undo this invoice.', 'error');
+    return;
+  }
+  if (!confirm('Undo this invoice? It will be moved back to Pending status.')) return;
+  const { ok } = await unwrapSupabase('Undo invoice', sb.from('invoices').update({
+    status: 'pending',
+    invoice_number: null,
+    invoice_date: null,
+    verified_at: null,
+    verified_by: null,
+  }).eq('id', invId));
+  if (!ok) return;
+  toast('Invoice moved back to Pending.');
+  await fetchPendingInvoices();
+  loadDashboard();
+  loadVerifications();
+  loadDoubleVerified();
+}
+
+async function openVerifyInvoiceModal(invId) {
+  if (!canVerifyInvoice()) { toast('You do not have permission to verify invoices.', 'error'); return; }
+  const { ok, data: inv } = await unwrapSupabase('Load invoice', sb.from('invoices').select('*').eq('id', invId).single());
+  if (!ok || !inv) return;
+  if (inv.status !== 'invoiced_awaiting_verification') { toast('This invoice is not awaiting verification.', 'error'); return; }
+  const cons = _consultants.find(c => c.id === inv.consultant_id);
+  const cli = _clients.find(c => c.id === inv.client_id);
+  const cyc = _cycles.find(c => c.id === inv.billing_cycle_id);
+  const rate = parseFloat(inv.billing_rate) || 0;
+  const hours = inv.hours != null ? inv.hours : 0;
+  const total = (rate && inv.hours != null) ? (rate * inv.hours).toFixed(2) : '—';
+  document.getElementById('verify-inv-id').value = inv.id;
+  document.getElementById('verify-inv-confirm').checked = false;
+  document.getElementById('verify-inv-summary').innerHTML =
+    `<strong>${escapeHtml(cons?.name || '—')}</strong> · ${escapeHtml(cli?.name || '—')}<br>` +
+    `Cycle: ${cyc ? escapeHtml(fmtDate(cyc.start_date) + ' → ' + fmtDate(cyc.end_date)) : '—'}<br>` +
+    `Rate: $${inv.billing_rate || '—'}/hr · Hours: ${hours} · Total: <strong>$${total}</strong><br>` +
+    `Invoice # ${escapeHtml(inv.invoice_number || '—')} · Date ${fmtDate(inv.invoice_date)}`;
+  openModal('verify-invoice-modal');
+}
+
+async function confirmVerifyInvoice() {
+  const id = document.getElementById('verify-inv-id').value;
+  if (!document.getElementById('verify-inv-confirm').checked) {
+    toast('Confirm the checklist to verify.', 'error');
+    return;
+  }
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session?.user?.id) { toast('Not signed in', 'error'); return; }
+  const { ok } = await unwrapSupabase('Verify invoice', sb.from('invoices').update({
+    status: 'double_verified',
+    verified_at: new Date().toISOString(),
+    verified_by: session.user.id,
+  }).eq('id', id).eq('status', 'invoiced_awaiting_verification'));
+  if (!ok) return;
+  toast('Invoice double-verified.');
+  closeModal('verify-invoice-modal');
+  loadVerifications();
+  loadDoubleVerified();
+  loadDashboard();
 }
 
 // ============================================================
 //  EDIT INVOICED RECORD
 // ============================================================
-let _editInvoicedCache = null; // holds the full invoiced data array from last loadInvoiced call
+let _editInvoicedCache = null;
 
 async function openEditInvoicedModal(invId) {
   const { ok, data: inv } = await unwrapSupabase('Load invoice', sb.from('invoices').select('*').eq('id', invId).single());
   if (!ok) return;
   if (!inv) { toast('Could not load invoice', 'error'); return; }
+  if (!canEditVerifiedInvoiceDetails()) {
+    toast('Only Global Admin can edit invoice lines on this screen.', 'error');
+    return;
+  }
   const cons = _consultants.find(c => c.id === inv.consultant_id);
   const cli  = _clients.find(c => c.id === inv.client_id);
   const cyc  = _cycles.find(c => c.id === inv.billing_cycle_id);
@@ -1772,6 +1918,7 @@ function updateEditInvoicedTotal() {
 }
 
 async function saveEditInvoiced() {
+  if (!canEditVerifiedInvoiceDetails()) { toast('Only Global Admin can save these edits.', 'error'); return; }
   const id     = document.getElementById('edit-inv-id').value;
   const rateRaw = document.getElementById('edit-inv-rate').value;
   const hoursRaw = document.getElementById('edit-inv-hours').value;
@@ -1786,16 +1933,16 @@ async function saveEditInvoiced() {
   if (!ok) return;
   toast('Invoice updated successfully!');
   closeModal('edit-invoiced-modal');
-  loadInvoiced();
-  loadVerified();
+  loadDoubleVerified();
+  loadVerifications();
 }
 
 // ============================================================
 //  EXPORT INVOICED CSV
 // ============================================================
-async function exportInvoicedCSV() {
-  // Fetch invoiced rows respecting current filters
-  const { ok, data } = await unwrapSupabase('Load invoiced for export', sb.from('invoices').select('*').eq('status', 'invoiced').order('invoice_date', { ascending: false }));
+async function exportDoubleVerifiedCSV() {
+  // Fetch double-verified rows respecting current filters
+  const { ok, data } = await unwrapSupabase('Load double-verified for export', sb.from('invoices').select('*').eq('status', 'double_verified').order('invoice_date', { ascending: false }));
   if (!ok) return;
   let rows = data || [];
 
@@ -1809,7 +1956,7 @@ async function exportInvoicedCSV() {
   if (fromFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.start_date >= fromFilter; });
   if (toFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.end_date <= toFilter; });
 
-  if (rows.length === 0) { toast('No invoiced records to export', 'error'); return; }
+  if (rows.length === 0) { toast('No double-verified records to export', 'error'); return; }
 
   // ---- Date helpers ----
   // Format: "17-May-25"
@@ -1903,110 +2050,6 @@ async function exportInvoicedCSV() {
   const a = document.createElement('a');
   a.href = url;
   const today = new Date().toISOString().split('T')[0];
-  a.download = `invoiced_export_${today}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  toast(`Exported ${rows.length} invoiced record(s) to CSV`);
-}
-
-async function exportVerifiedCSV() {
-  const { ok, data } = await unwrapSupabase('Load verified for export', sb.from('invoices').select('*').eq('status', 'verified').order('verified_at', { ascending: false }));
-  if (!ok) return;
-  let rows = data || [];
-
-  const clientFilter = document.getElementById('vf-client').value;
-  const consultantFilter = document.getElementById('vf-consultant').value;
-  const fromFilter = document.getElementById('vf-from').value;
-  const toFilter = document.getElementById('vf-to').value;
-
-  if (clientFilter) rows = rows.filter(r => r.client_id === clientFilter);
-  if (consultantFilter) rows = rows.filter(r => r.consultant_id === consultantFilter);
-  if (fromFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.start_date >= fromFilter; });
-  if (toFilter) rows = rows.filter(r => { const cyc = _cycles.find(c => c.id === r.billing_cycle_id); return cyc && cyc.end_date <= toFilter; });
-
-  if (rows.length === 0) { toast('No double-verified records to export', 'error'); return; }
-
-  function fmtPeriodDate(iso) {
-    if (!iso) return '';
-    const d = new Date(iso + 'T12:00:00');
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = months[d.getMonth()];
-    const yy = String(d.getFullYear()).slice(-2);
-    return `${dd}-${mm}-${yy}`;
-  }
-  function fmtBillDate(iso) {
-    if (!iso) return '';
-    const d = new Date(iso + 'T12:00:00');
-    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-    return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-  }
-  function fmtDueDate(iso) {
-    if (!iso) return '';
-    const d = new Date(iso + 'T12:00:00');
-    const due = new Date(d.getFullYear(), d.getMonth() + 2, 0);
-    const dd = String(due.getDate()).padStart(2, '0');
-    const mm = String(due.getMonth() + 1).padStart(2, '0');
-    const yy = String(due.getFullYear()).slice(-2);
-    return `${dd}/${mm}/${yy}`;
-  }
-
-  const headers = [
-    'Invoice Number',
-    'Candidate Name',
-    'Bill Rate ($/hr)',
-    'Description',
-    'Vendor',
-    'Period',
-    'Hours Approved',
-    'Total Bill Amount',
-    'Bill Date',
-    'Due Date',
-    'Verified At',
-  ];
-
-  const csvRows = rows.map(inv => {
-    const cons = _consultants.find(c => c.id === inv.consultant_id);
-    const cli = _clients.find(c => c.id === inv.client_id);
-    const cyc = _cycles.find(c => c.id === inv.billing_cycle_id);
-    const name = cons?.name || '';
-    const vendor = cli?.name || '';
-    const rate = inv.billing_rate ? parseFloat(inv.billing_rate).toFixed(2) : '';
-    const hours = inv.hours != null ? inv.hours : '';
-    const total = (inv.billing_rate && inv.hours != null)
-      ? '$' + (parseFloat(inv.billing_rate) * parseFloat(inv.hours)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : '';
-    const periodStart = fmtPeriodDate(cyc?.start_date);
-    const periodEnd = fmtPeriodDate(cyc?.end_date);
-    const period = cyc ? `${periodStart} to ${periodEnd}` : '';
-    const description = `${name}_ ${period}_${hours} Hours`;
-    const billDate = fmtBillDate(inv.invoice_date);
-    const dueDate = fmtDueDate(inv.invoice_date);
-    const verifiedAt = inv.verified_at ? new Date(inv.verified_at).toISOString() : '';
-    return [
-      inv.invoice_number || '',
-      name,
-      rate ? `$${rate}` : '',
-      description,
-      vendor,
-      period,
-      hours,
-      total,
-      billDate,
-      dueDate,
-      verifiedAt,
-    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
-  });
-
-  const csv = [headers.map(h => `"${h}"`).join(','), ...csvRows].join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  const today = new Date().toISOString().split('T')[0];
   a.download = `double_verified_export_${today}.csv`;
   document.body.appendChild(a);
   a.click();
@@ -2042,7 +2085,7 @@ async function exportPendingCSV() {
 
   if (rows.length === 0) { toast('No pending invoices to export', 'error'); return; }
 
-  // Reuse the same date helpers defined inside exportInvoicedCSV
+  // Reuse the same date helpers defined inside exportDoubleVerifiedCSV
   function fmtPeriodDate(iso) {
     if (!iso) return '';
     const d = new Date(iso + 'T00:00:00');
@@ -2180,6 +2223,7 @@ function clearUpcomingFilters() {
 }
 
 async function removePendingInvoice(invId, consultantId, cycleId) {
+  if (!isGlobalAdmin()) { toast('Only a Global Admin can remove pending invoices.', 'error'); return; }
   if (!confirm('Remove this pending invoice? The consultant will be unassigned from this billing cycle.')) return;
   const d1 = await unwrapSupabase('Delete pending invoice', sb.from('invoices').delete().eq('id', invId));
   if (!d1.ok) return;
@@ -2196,6 +2240,7 @@ async function removePendingInvoice(invId, consultantId, cycleId) {
 //  MARK AS INVOICED
 // ============================================================
 function openInvoiceModal(invId) {
+  if (!canMarkInvoiced()) { toast('You do not have permission to submit invoices for verification.', 'error'); return; }
   const inv = [..._pendingInvoices, ..._allPendingInvoices].find(i => i.id === invId) || { id: invId };
   document.getElementById('inv-pending-id').value = invId;
   document.getElementById('inv-date').value = new Date().toISOString().split('T')[0];
@@ -2226,23 +2271,23 @@ function openInvoiceModal(invId) {
 }
 
 async function confirmMarkInvoiced() {
+  if (!canMarkInvoiced()) { toast('You do not have permission to submit invoices for verification.', 'error'); return; }
   const id = document.getElementById('inv-pending-id').value;
   const num = document.getElementById('inv-number').value;
   const date = document.getElementById('inv-date').value;
   const hoursEl = document.getElementById('inv-hours');
   const hoursVal = hoursEl ? hoursEl.value : null;
   const hours = (hoursVal !== '' && hoursVal != null && !isNaN(parseFloat(hoursVal))) ? parseFloat(hoursVal) : null;
-  const updatePayload = { status:'invoiced', invoice_number: num||null, invoice_date: date };
+  const updatePayload = { status: 'invoiced_awaiting_verification', invoice_number: num || null, invoice_date: date };
   if (hours != null) updatePayload.hours = hours;
-  const { ok } = await unwrapSupabase('Mark as invoiced', sb.from('invoices').update(updatePayload).eq('id', id));
+  const { ok } = await unwrapSupabase('Submit for verification', sb.from('invoices').update(updatePayload).eq('id', id).eq('status', 'pending'));
   if (!ok) return;
-  toast('Marked as invoiced!');
+  toast('Submitted for verification. AP Manager or Global Admin can confirm under Verifications.');
   closeModal('invoice-modal');
   await fetchPendingInvoices();
   loadDashboard();
   loadPending();
-  loadInvoiced();
-  loadVerified();
+  loadVerifications();
 }
 
 // ============================================================
@@ -2252,6 +2297,12 @@ async function loadConsultants() {
   await fetchConsultants();
   const tbody = document.getElementById('consultants-body');
   if (_consultants.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="color:var(--text-3); text-align:center; padding:30px;">No consultants yet. Add one to get started.</td></tr>`; return; }
+  const act = (id) => isGlobalAdmin()
+    ? `<td style="display:flex;gap:6px;">
+        <button class="btn btn-secondary btn-xs" onclick="openConsultantModal('${id}')">Edit</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteConsultant('${id}')">Delete</button>
+      </td>`
+    : `<td><span style="font-size:12px;color:var(--text-3);">View only</span></td>`;
   tbody.innerHTML = _consultants.map(c => {
     const clientIds = [...new Set(_assignments.filter(a=>a.consultant_id===c.id).map(a=>{ const cyc=_cycles.find(cy=>cy.id===a.billing_cycle_id); return cyc?.client_id; }).filter(Boolean))];
     const clientNames = clientIds.map(id => _clients.find(cl=>cl.id===id)?.name).filter(Boolean);
@@ -2260,10 +2311,7 @@ async function loadConsultants() {
       <td>${escapeHtml(c.email||'—')}</td>
       <td>${escapeHtml(c.phone||'—')}</td>
       <td>${clientNames.map(n=>`<span class="cycle-chip">${escapeHtml(n)}</span>`).join('')||'<span style="color:var(--text-3);font-size:12px;">None</span>'}</td>
-      <td style="display:flex;gap:6px;">
-        <button class="btn btn-secondary btn-xs" onclick="openConsultantModal('${c.id}')">Edit</button>
-        <button class="btn btn-danger btn-xs" onclick="deleteConsultant('${c.id}')">Delete</button>
-      </td>
+      ${act(c.id)}
     </tr>`;
   }).join('');
 }
@@ -2283,6 +2331,7 @@ function openConsultantModal(id) {
 }
 
 async function saveConsultant() {
+  if (!requireGlobalAdminFor('add or edit consultants')) return;
   const id = document.getElementById('cons-id').value;
   const name = document.getElementById('cons-name').value.trim();
   if (!name) { toast('Name is required','error'); return; }
@@ -2311,6 +2360,7 @@ async function deleteConsultantCore(id) {
 }
 
 async function deleteConsultant(id) {
+  if (!requireGlobalAdminFor('delete consultants')) return;
   if (!confirm('Delete this consultant? All assignments and invoices will also be removed.')) return;
   if (!(await deleteConsultantCore(id))) return;
   toast('Consultant deleted');
@@ -2325,6 +2375,12 @@ async function loadClients() {
   await fetchClients();
   const tbody = document.getElementById('clients-body');
   if (_clients.length === 0) { tbody.innerHTML = `<tr><td colspan="5" style="color:var(--text-3); text-align:center; padding:30px;">No clients yet.</td></tr>`; return; }
+  const act = (id) => isGlobalAdmin()
+    ? `<td style="display:flex;gap:6px;">
+        <button class="btn btn-secondary btn-xs" onclick="openClientModal('${id}')">Edit</button>
+        <button class="btn btn-danger btn-xs" onclick="deleteClient('${id}')">Delete</button>
+      </td>`
+    : `<td><span style="font-size:12px;color:var(--text-3);">View only</span></td>`;
   tbody.innerHTML = _clients.map(c => {
     const cycleCount = _cycles.filter(cy=>cy.client_id===c.id).length;
     return `<tr>
@@ -2332,10 +2388,7 @@ async function loadClients() {
       <td>${escapeHtml(c.contact||'—')}</td>
       <td>${escapeHtml(c.email||'—')}</td>
       <td><span class="badge badge-active">${cycleCount} cycle${cycleCount!==1?'s':''}</span></td>
-      <td style="display:flex;gap:6px;">
-        <button class="btn btn-secondary btn-xs" onclick="openClientModal('${c.id}')">Edit</button>
-        <button class="btn btn-danger btn-xs" onclick="deleteClient('${c.id}')">Delete</button>
-      </td>
+      ${act(c.id)}
     </tr>`;
   }).join('');
 }
@@ -2355,6 +2408,7 @@ function openClientModal(id) {
 }
 
 async function saveClient() {
+  if (!requireGlobalAdminFor('add or edit clients')) return;
   const id = document.getElementById('cli-id').value;
   const name = document.getElementById('cli-name').value.trim();
   if (!name) { toast('Client name is required','error'); return; }
@@ -2373,6 +2427,7 @@ async function saveClient() {
 }
 
 async function deleteClient(id) {
+  if (!requireGlobalAdminFor('delete clients')) return;
   if (!confirm('Delete this client? All billing cycles and invoices for this client will also be removed.')) return;
   const cycleIds = _cycles.filter(c=>c.client_id===id).map(c=>c.id);
   if (cycleIds.length) {
@@ -2410,20 +2465,24 @@ async function loadBillingCycles() {
     const consNames = assigned.map(a=>_consultants.find(co=>co.id===a.consultant_id)?.name).filter(Boolean);
     let status = c.end_date < today ? 'ended' : (c.start_date <= today ? 'active' : 'upcoming');
     const statusBadge = status==='ended' ? `<span class="badge badge-pending">Ended</span>` : status==='active' ? `<span class="badge badge-active">Active</span>` : `<span class="badge" style="background:var(--surface-3);color:var(--text-2);">Upcoming</span>`;
+    const del = isGlobalAdmin()
+      ? `<td style="display:flex;gap:6px;">
+        <button class="btn btn-danger btn-xs" onclick="deleteCycle('${c.id}')">Delete</button>
+      </td>`
+      : `<td><span style="font-size:12px;color:var(--text-3);">View only</span></td>`;
     return `<tr>
       <td>${escapeHtml(cli?.name||'—')}</td>
       <td><span class="badge badge-active" style="background:var(--surface-3);color:var(--text-2);text-transform:capitalize;">${escapeHtml(c.cycle_type||'custom')}</span></td>
       <td class="mono" style="font-size:12px;">${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}<br><span style="color:var(--text-3);font-family:inherit;">${escapeHtml(c.label||'')}</span></td>
       <td>${statusBadge}</td>
       <td>${consNames.map(n=>`<span class="cycle-chip">${escapeHtml(n)}</span>`).join('')||'<span style="color:var(--text-3);font-size:12px;">None</span>'}</td>
-      <td style="display:flex;gap:6px;">
-        <button class="btn btn-danger btn-xs" onclick="deleteCycle('${c.id}')">Delete</button>
-      </td>
+      ${del}
     </tr>`;
   }).join('');
 }
 
 async function unassignEndedCycles() {
+  if (!requireGlobalAdminFor('unassign ended cycles')) return;
   const today = new Date().toISOString().split('T')[0];
   const endedCycles = _cycles.filter(c => c.end_date < today);
   if (endedCycles.length === 0) { toast('No ended billing cycles found', 'error'); return; }
@@ -2474,6 +2533,7 @@ function generateCycles(type, startStr, count) {
 }
 
 async function saveCycle() {
+  if (!requireGlobalAdminFor('create billing cycles')) return;
   const clientId = document.getElementById('cyc-client').value;
   const type = document.getElementById('cyc-type').value;
   const label = document.getElementById('cyc-label').value;
@@ -2535,6 +2595,7 @@ async function autoExtendAssignmentsToNewCycles(clientId, newCycleStartDates) {
 }
 
 async function deleteCycle(id) {
+  if (!requireGlobalAdminFor('delete billing cycles')) return;
   if (!confirm('Delete this billing cycle? All associated invoices and assignments will be removed.')) return;
   const d1 = await unwrapSupabase('Delete cycle invoices', sb.from('invoices').delete().eq('billing_cycle_id',id));
   if (!d1.ok) return;
@@ -2668,6 +2729,15 @@ function renderAssignmentTable() {
     const cycBg     = assignedCount === totalCycles ? 'var(--success-light)' : 'var(--warning-light)';
     const rowOpacity = isEnded ? 'opacity:0.65;' : '';
 
+    const cycBtn = isGlobalAdmin()
+      ? `<button class="btn btn-secondary btn-xs" onclick="openConsultantCyclesModal('${cid}')" style="font-size:11px;">
+          <span class="badge" style="background:${cycBg};color:${cycColor};margin-right:4px;">${assignedCount}/${totalCycles}</span>
+          Billing Cycles
+        </button>`
+      : `<span class="badge" style="background:${cycBg};color:${cycColor};">${assignedCount}/${totalCycles}</span>`;
+    const editBtn = isGlobalAdmin()
+      ? `<button class="btn btn-secondary btn-xs" onclick="openEditConsModal('${cid}')">Edit</button>`
+      : '<span style="font-size:12px;color:var(--text-3);">—</span>';
     return `<tr style="${rowOpacity}">
       <td>
         <strong>${escapeHtml(cons?.name || cid)}</strong>
@@ -2677,15 +2747,8 @@ function renderAssignmentTable() {
       <td>${startDisp}</td>
       <td>${endDisp}</td>
       <td><span class="badge" style="background:${statusBg};color:${statusColor};">${statusLabel}</span></td>
-      <td>
-        <button class="btn btn-secondary btn-xs" onclick="openConsultantCyclesModal('${cid}')" style="font-size:11px;">
-          <span class="badge" style="background:${cycBg};color:${cycColor};margin-right:4px;">${assignedCount}/${totalCycles}</span>
-          Billing Cycles
-        </button>
-      </td>
-      <td>
-        <button class="btn btn-secondary btn-xs" onclick="openEditConsModal('${cid}')">Edit</button>
-      </td>
+      <td>${cycBtn}</td>
+      <td>${editBtn}</td>
     </tr>`;
   }).join('');
 }
@@ -2693,6 +2756,7 @@ function renderAssignmentTable() {
 
 // ── Billing Cycles Modal ──────────────────────────────────────
 function openConsultantCyclesModal(consultantId) {
+  if (!requireGlobalAdminFor('change cycle assignments')) return;
   _ccConsultantId = consultantId;
   const cons = _consultants.find(c => c.id === consultantId);
   const cli  = _clients.find(c => c.id === _currentAsgnClientId);
@@ -2742,6 +2806,7 @@ function ccSelectAll(checked) {
 }
 
 async function saveCycleAssignments() {
+  if (!requireGlobalAdminFor('change cycle assignments')) return;
   const consultantId = _ccConsultantId;
   if (!consultantId) return;
 
@@ -2801,6 +2866,7 @@ async function saveCycleAssignments() {
 
 // ── Edit consultant assignment (rate + dates) ─────────────────
 function openEditConsModal(consultantId) {
+  if (!requireGlobalAdminFor('edit assignments')) return;
   const myAsgns = _currentAsgnData.filter(a => a.consultant_id === consultantId);
   if (!myAsgns.length) return;
   const cons = _consultants.find(c => c.id === consultantId);
@@ -2820,6 +2886,7 @@ function openEditConsModal(consultantId) {
 }
 
 async function saveAssignment() {
+  if (!requireGlobalAdminFor('edit assignments')) return;
   const idRaw  = document.getElementById('ea-id').value;
   const rateRaw = document.getElementById('ea-rate').value;
   const rate   = (rateRaw !== '' && !isNaN(parseFloat(rateRaw))) ? parseFloat(rateRaw) : null;
@@ -2929,6 +2996,7 @@ async function saveAssignment() {
 
 
 async function deleteAssignment() {
+  if (!requireGlobalAdminFor('remove assignments')) return;
   const idRaw = document.getElementById('ea-id').value;
   if (!idRaw) return;
   const { consultant_id } = JSON.parse(idRaw);
@@ -2963,6 +3031,7 @@ function openEditAsgnModal(cid, cycId) { openEditConsModal(cid); }
 
 // ── New Assignment ────────────────────────────────────────────
 function openNewAsgnModal() {
+  if (!requireGlobalAdminFor('create assignments')) return;
   if (!_currentAsgnClientId) { toast('Load a client first', 'error'); return; }
   const cli = _clients.find(c => c.id === _currentAsgnClientId);
 
@@ -2983,6 +3052,7 @@ function openNewAsgnModal() {
 }
 
 async function saveNewAssignment() {
+  if (!requireGlobalAdminFor('create assignments')) return;
   const consultantId = document.getElementById('na-consultant').value;
   const rateRaw      = document.getElementById('na-rate').value;
   const start        = document.getElementById('na-start').value || null;
@@ -3100,6 +3170,7 @@ async function previewBulkConsultants() {
 }
 
 async function saveBulkConsultants() {
+  if (!requireGlobalAdminFor('bulk add consultants')) return;
   const parsed = parseBulkConsultants();
   if (parsed.length === 0) { toast('No valid entries. Enter at least one name.', 'error'); return; }
   const checks = [...document.querySelectorAll('#bulk-cons-preview .bulk-cons-chk')];
@@ -3167,6 +3238,7 @@ async function previewBulkDeleteConsultants() {
 }
 
 async function saveBulkDeleteConsultants() {
+  if (!requireGlobalAdminFor('bulk delete consultants')) return;
   const parsed = parseBulkDeleteConsultantLines();
   if (parsed.length === 0) { toast('Enter at least one name to match.', 'error'); return; }
   const boxes = [...document.querySelectorAll('#bulk-del-cons-preview .bulk-del-chk')];
@@ -3234,6 +3306,7 @@ function previewBulkCycles() {
 }
 
 async function saveBulkCycles() {
+  if (!requireGlobalAdminFor('bulk add billing cycles')) return;
   const clientId = document.getElementById('bulk-cyc-client').value;
   if (!clientId) { toast('Select a client first', 'error'); return; }
   const label = document.getElementById('bulk-cyc-label').value.trim();
@@ -4679,6 +4752,8 @@ CREATE TABLE invoices (
   invoice_date DATE,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+-- Status workflow (see migration 20260506140000_roles_verification.sql): pending |
+--   invoiced_awaiting_verification | double_verified. Add verified_at, verified_by via that migration.
 -- If table already exists, run: ALTER TABLE invoices ADD COLUMN IF NOT EXISTS hours NUMERIC(10,2);
 -- Recommended: apply supabase/migrations/20260504120000_generate_pending_invoices.sql for
 --   UNIQUE(consultant_id, billing_cycle_id) on invoices and generate_pending_invoices() RPC
