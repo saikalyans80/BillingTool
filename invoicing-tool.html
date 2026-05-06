@@ -4666,7 +4666,12 @@ function clearTsFilters() {
 function getCycleTimesheetCoverage(consultantId, cycleId) {
   const cyc = _cycles.find(c => c.id === cycleId);
   if (!cyc) return { pct: 0, submitted: 0, expected: 0, missing: [] };
-  const fridays  = getFridaysInCycle(cyc.start_date, cyc.end_date);
+  
+  const asgn = _assignments.find(a => a.consultant_id === consultantId && a.billing_cycle_id === cycleId);
+  const targetStart = (asgn && asgn.start_date && asgn.start_date > cyc.start_date) ? asgn.start_date : cyc.start_date;
+  const targetEnd = (asgn && asgn.end_date && asgn.end_date < cyc.end_date) ? asgn.end_date : cyc.end_date;
+  
+  const fridays  = getFridaysInCycle(targetStart, targetEnd);
   const submitted = _timesheets.filter(t => t.consultant_id === consultantId && t.billing_cycle_id === cycleId).map(t => t.week_ending);
   const missing  = fridays.filter(f => !submitted.includes(f));
   const pct = fridays.length ? Math.round((submitted.length / fridays.length) * 100) : 100;
