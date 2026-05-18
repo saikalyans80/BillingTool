@@ -1,0 +1,46 @@
+# Keeps the Supabase free-tier project from pausing after 7 days of inactivity.
+# Safe for production: one read-only GET (limit 1), no inserts/updates/deletes/RPCs.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL       — Project URL (e.g. https://xxxx.supabase.co)
+#   SUPABASE_ANON_KEY  — anon public key (same as invoicing-tool config)
+
+name: Supabase keep-alive
+
+on:
+  schedule:
+    # Monday & Thursday 14:00 UTC — well inside the 7-day inactivity window
+    - cron: '0 14 * * 1,4'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read-only database ping
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "::error::Add SUPABASE_URL and SUPABASE_ANON_KEY in GitHub repo secrets."
+            exit 1
+          fi
+          base="${SUPABASE_URL%/}"
+          # Smallest possible read: one column, one row, settings table (app key/value store)
+          endpoint="${base}/rest/v1/settings?select=key&limit=1"
+          http_code=$(curl -sS -o /tmp/keepalive-body.json -w "%{http_code}" \
+            -X GET \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Accept: application/json" \
+            "${endpoint}")
+          echo "HTTP ${http_code}"
+          echo "Response: $(cat /tmp/keepalive-body.json)"
+          if [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
+            echo "::error::Ping failed. If the project is paused, restore it in the Supabase dashboard first."
+            exit 1
+          fi
+          echo "Keep-alive OK — read-only request completed; no data was modified."
